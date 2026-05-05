@@ -11,10 +11,24 @@ def parse_datetime(valor):
         return None
 
     try:
+        valor = valor.strip()
+
+        if valor.endswith("Z"):
+            valor = valor[:-1]
+
+        valor = valor.replace("T", " ")
+
         return datetime.fromisoformat(valor)
-    except:
+
+    except Exception as e:
+        print(f"[parse_datetime] erro ao converter: {valor} | erro: {e}")
         return None
 
+def get_casa_origem(data: dict) -> str:
+    sigla = data.get("sigla")
+    if sigla == "PRS":
+        return "SF"
+    return data.get("siglaCasaIniciadora")
 
 with open(
     "data/senado/detalhes_proposicoes.json",
@@ -97,18 +111,23 @@ with open(
         norma_gerada = None
 
         if d.get("normaGerada"):
-
             norma = d["normaGerada"]
 
-            norma_gerada = {
-                "nome": norma.get("identificacao"),
-                "ano": norma.get("ano"),
-                "ementa": norma.get("ementa"),
-                "data_publicacao": parse_datetime(
-                    norma.get("dataPublicacao")
-                )
-            }
+            nome = norma.get("descricao")
+            if not nome:
+                nome = f'{norma.get("tipo")} nº {norma.get("numero")}/{norma.get("anoAssinatura")}'
 
+            norma_gerada = {
+                "nome": nome,
+                "ano": int(norma["anoAssinatura"]) if norma.get("anoAssinatura") else None,
+                "ementa": norma.get("descricao"),
+                "data_publicacao": parse_datetime(norma.get("dataPublicacao")),
+                
+                # extras úteis (se quiser guardar depois)
+                # "data_assinatura": parse_datetime(norma.get("dataAssinatura")),
+                # "veiculo_publicacao": norma.get("veiculoPublicacao"),
+                # "sigla_tipo": norma.get("siglaTipo"),
+            }
         # =========================
         # TRANSFORMADO EM NORMA
         # =========================
@@ -158,7 +177,7 @@ with open(
             "situacao_atual": situacao_atual,
             "em_tramitacao": tramitando,
             "casa_atual": d.get("casaIdentificadora"),
-            "casa_origem": d.get("siglaCasaIniciadora"),
+            "casa_origem": get_casa_origem(d),
             "outros_nomes": outros_nomes,
             "transformado_em_norma": transformado_em_norma,
             "norma_gerada": norma_gerada,

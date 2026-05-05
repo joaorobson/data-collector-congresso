@@ -55,7 +55,7 @@ class Proposicao(BaseModel):
     uri: str
     ano: int
     nome: str
-    nome_inicial: str
+    nome_inicial: Optional[str] = None
     palavras_chave: List[str]
     tipo: Tipo
     sigla_tipo: SiglaTipo
@@ -72,10 +72,10 @@ class Proposicao(BaseModel):
 
 class Materia(BaseModel):
     id: int
-    casa_inicadora: Casa
+    casa_iniciadora: Casa
     tipo: Tipo
     sigla_tipo: SiglaTipo
-    proposicao_sf: Optional[Proposicao]
-    proposicao_cd: Optional[Proposicao]
+    proposicao_sf: Optional[Proposicao] = None
+    proposicao_cd: Optional[Proposicao] = None
     transformada_em_norma: bool
     norma_gerada: Optional[Norma]
