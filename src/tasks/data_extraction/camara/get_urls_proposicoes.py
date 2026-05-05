@@ -7,7 +7,7 @@ from src.shared.async_collector import AsyncCollector
 URL_TEMPLATE = "https://dadosabertos.camara.leg.br/api/v2/proposicoes?siglaTipo={}&dataApresentacaoInicio={}&dataApresentacaoFim={}&pagina={}&itens=100"
 
 # 1. Carregar tipos
-with open("data/camara/sigla_tipos_filtradas.json", "r", encoding="utf-8") as f:
+with open("data/camara/sigla_tipos_proposicoes.json", "r", encoding="utf-8") as f:
     TIPOS_PROCESSOS_CAMARA = json.load(f)
     SIGLAS_STRING = ",".join(TIPOS_PROCESSOS_CAMARA)
 

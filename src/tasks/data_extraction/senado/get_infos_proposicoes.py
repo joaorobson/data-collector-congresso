@@ -8,7 +8,7 @@ async def main():
     start_time = time.time()
     
     # Configurações de caminhos
-    input_tipos = "data/senado/sigla_tipos_filtradas.json"
+    input_tipos = "data/senado/sigla_tipos_proposicoes.json"
     output_file = "data/senado/infos_proposicoes.json"
     base_url = "https://legis.senado.leg.br/dadosabertos/processo"
     

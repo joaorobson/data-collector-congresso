@@ -35,8 +35,8 @@ class SiglaTipo(Enum):
 class Norma(BaseModel):
     nome: str
     ano: int
-    ementa: str
-    data_publicacao: datetime
+    ementa: Optional[str] = None
+    data_publicacao: Optional[datetime] = None
     
 class Emenda(BaseModel):
     id: int
@@ -60,7 +60,7 @@ class Proposicao(BaseModel):
     tipo: Tipo
     sigla_tipo: SiglaTipo
     autoria: List[Autor]
-    situacao_atual: str
+    situacao_atual: Optional[str] = None
     em_tramitacao: bool
     data_apresentacao: datetime
     casa_atual: Casa

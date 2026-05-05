@@ -22,5 +22,5 @@ for sigla_tipo in sigla_tipos_json:
         # Seu código aqui...
 print(f"Siglas filtradas: {sorted(sigla_tipos_filtradas)}")
 
-with open("data/senado/sigla_tipos_proposicoes_filtradas.json", "w", encoding="utf-8") as f:
+with open("data/senado/sigla_tipos_proposicoes.json", "w", encoding="utf-8") as f:
     json.dump(sorted(sigla_tipos_filtradas), f)

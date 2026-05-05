@@ -8,10 +8,25 @@ URL_RELACIONADAS = (
     "https://www.camara.leg.br/SitCamaraWS/Proposicoes.asmx/ObterProposicaoPorID?IdProp={}"
 )
 
+
+def strip_namespace(root):
+    for elem in root.iter():
+        if '}' in elem.tag:
+            elem.tag = elem.tag.split('}', 1)[1]
+
+
+def find_text(root, tags):
+    for tag in tags:
+        elem = root.find(f".//{tag}")
+        if elem is not None and elem.text and elem.text.strip():
+            return elem.text.strip()
+    return None
+
+
 async def main():
     input_path = "data/camara/infos_proposicoes.json"
     tipos_path = "data/camara/sigla_tipos_emendas.json"
-    output_path = "data/camara/nome_origem_proposicoes.json"
+    output_path = "data/camara/situacao_e_nome_origem_proposicoes.json"
 
     # 1. Carrega proposições
     if not os.path.exists(input_path):
@@ -40,7 +55,7 @@ async def main():
 
     urls = [p["url"] for p in processos]
 
-    print(f"🚀 Coletando proposições relacionadas de {len(urls)} proposições...")
+    print(f"🚀 Coletando dados de {len(urls)} proposições...")
 
     # 3. Coleta assíncrona
     collector = AsyncCollector(
@@ -48,32 +63,36 @@ async def main():
         retries=5
     )
 
-
     raw_results = await collector.collect(urls)
-    # 4. Salva como dict:
-    # {
-    #   "12345": [...],
-    #   "67890": [...]
-    # }
+
+    # 4. Processa resultados
     resultados_finais = {}
 
     for processo, res in zip(processos, raw_results):
 
         id_processo = str(processo["id"])
-        nome_origem = None
 
-        if isinstance(res, str):  # 🔥 agora é XML string
+        nome_origem = None
+        situacao = None
+
+        if isinstance(res, str):
             try:
                 root = ET.fromstring(res)
 
-                elem = root.find("nomeProposicaoOrigem")
-                if elem is not None and elem.text:
-                    nome_origem = elem.text.strip()
+                # 🔹 remove namespace (caso exista)
+                strip_namespace(root)
+
+                # 🔹 extrai campos
+                nome_origem = find_text(root, ["nomeProposicaoOrigem"])
+                situacao = find_text(root, ["Situacao", "situacao", "descricaoSituacao"])
 
             except Exception as e:
                 print(f"⚠️ Erro ao processar XML {id_processo}: {e}")
 
-        resultados_finais[id_processo] = nome_origem
+        resultados_finais[id_processo] = {
+            "nome_origem": nome_origem,
+            "situacao": situacao
+        }
 
     print(f"\n✅ Coleta concluída!")
     print(f"📦 Proposições processadas: {len(resultados_finais)}")
@@ -90,6 +109,7 @@ async def main():
         )
 
     print(f"💾 Arquivo salvo em: {output_path}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

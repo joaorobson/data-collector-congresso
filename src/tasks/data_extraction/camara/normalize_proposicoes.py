@@ -13,57 +13,80 @@ def parse_datetime(valor):
     except:
         return None
 
+def get_casa_origem(data: dict) -> str:
+    sigla = data.get("siglaTipo")
+    if sigla == "PRF":
+        return "SF"
+    return "CD"
 
-def extrair_norma_gerada(status):
-
-    if not status:
+def extrair_norma_gerada(descricao_situacao: str, situacao: str):
+    if not descricao_situacao and not situacao:
         return None
 
-    descricao = (
-        status.get("descricaoSituacao", "") or ""
-    ).lower()
+    descricao = (descricao_situacao or "").lower()
+    situacao = (situacao or "").strip()
 
+    # 🔹 1. Gate EXATO (evita falso positivo)
     if "transformado em norma jurídica" not in descricao:
         return None
 
-    despacho = status.get("despacho", "")
+    # 🔹 2. Remove prefixo (ex: "MESA - ")
+    situacao_limpa = re.sub(r"^[A-Z0-9\(\)\/]+?\s*-\s*", "", situacao)
 
-    padrao = re.search(
-        r"(DECRETO LEGISLATIVO|LEI|EMENDA CONSTITUCIONAL)\s+(\d+)\/(\d+)",
-        despacho,
-        re.IGNORECASE
+    # 🔹 3. Regex baseada nos tipos reais
+    pattern = re.compile(
+        r'(?i)('
+        r'decreto legislativo|'
+        r'emenda constitucional|'
+        r'lei complementar|'
+        r'lei ordinária|'
+        r'resolução da câmara dos deputados|'
+        r'resolução do congresso nacional'
+        r')[^\d]*(\d+)[/](\d{2,4})'
     )
 
-    if not padrao:
+    match = pattern.search(situacao_limpa)
+
+    if not match:
         return {
             "nome": None,
             "ano": None,
             "ementa": None,
-            "data_publicacao": parse_datetime(
-                status.get("dataHora")
-            )
+            "data_publicacao": None
         }
 
-    tipo_norma = padrao.group(1).title()
-    numero = padrao.group(2)
-    ano = padrao.group(3)
+    tipo, numero, ano = match.groups()
 
-    if len(ano) == 2:
-        ano = int(f"20{ano}")
-    else:
-        ano = int(ano)
+    # 🔹 4. Normalização do tipo
+    tipo = tipo.lower()
 
-    return {
-        "nome": f"{tipo_norma} nº {numero}/{ano}",
-        "ano": ano,
-        "ementa": None,
-        "data_publicacao": parse_datetime(
-            status.get("dataHora")
-        )
+    mapping = {
+        "decreto legislativo": "Decreto Legislativo",
+        "emenda constitucional": "Emenda Constitucional",
+        "lei complementar": "Lei Complementar",
+        "lei ordinária": "Lei Ordinária",
+        "resolução da câmara dos deputados": "Resolução da Câmara dos Deputados",
+        "resolução do congresso nacional": "Resolução do Congresso Nacional",
     }
 
-with open("data/camara/nome_origem_proposicoes.json", "r", encoding="utf-8") as f:
-    nome_origem_dict = json.load(f)
+    tipo = mapping.get(tipo, tipo.title())
+
+    # 🔹 5. Ano
+    ano = int(ano)
+    if ano < 100:
+        ano += 2000
+
+    nome = f"{tipo} nº {numero}/{ano}"
+
+    return {
+        "nome": nome,
+        "ano": ano,
+        "ementa": None,
+        "data_publicacao": None
+    }
+
+with open("data/camara/situacao_e_nome_origem_proposicoes.json", "r", encoding="utf-8") as f:
+    situacao_e_nome_origem_dict = json.load(f)
 
 
 
@@ -123,7 +146,7 @@ with open(
 
         situacao_atual = status.get(
             "descricaoSituacao"
-        )
+        ) or situacao_e_nome_origem_dict.get(str(d.get("id")), {}).get("situacao")
 
         # =========================
         # TRAMITAÇÃO
@@ -136,7 +159,7 @@ with open(
         # =========================
         # NORMA GERADA
         # =========================
-        norma_gerada = extrair_norma_gerada(status)
+        norma_gerada = extrair_norma_gerada(status.get("descricaoSituacao"), situacao_e_nome_origem_dict.get(str(d.get("id")), {}).get("situacao"))
 
         transformado_em_norma = (
             norma_gerada is not None
@@ -154,7 +177,7 @@ with open(
                 f"{d.get('numero')}/"
                 f"{d.get('ano')}"
             ),
-            "nome_inicial": nome_origem_dict.get(str(d.get("id"))),
+            "nome_inicial": situacao_e_nome_origem_dict.get("nome_origem"),
             "numero": d.get("numero"),
             "ementa": ementa,
             "data_apresentacao": data_apresentacao,
@@ -163,7 +186,7 @@ with open(
             "situacao_atual": situacao_atual,
             "em_tramitacao": em_tramitacao,
             "casa_atual": "CD",
-            "casa_origem": "CD",
+            "casa_origem": get_casa_origem(d),
             "transformado_em_norma": transformado_em_norma,
             "norma_gerada": norma_gerada,
 
