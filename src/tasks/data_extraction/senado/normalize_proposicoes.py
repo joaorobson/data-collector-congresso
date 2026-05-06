@@ -28,6 +28,14 @@ def get_casa_origem(data: dict) -> str:
     sigla = data.get("sigla")
     if sigla == "PRS":
         return "SF"
+    elif set([a.get("siglaCargo") for a in data.get("autoriaIniciativa", [])]) == {"DEPUTADO"}:
+        return "SF"
+    elif set([a.get("siglaCargo") for a in data.get("autoriaIniciativa", [])]) == {"SENADOR"}:
+        return "CD"
+    elif set([a.get("siglaTipo") for a in data.get("autoriaIniciativa", [])]) == {"COMISSAO_SENADO_CAMARA"}:
+        return "CN"
+    elif set([a.get("siglaTipo") for a in data.get("autoriaIniciativa", [])]) == {"COMISSAO_CONGRESSO"}:
+        return "CN"
     return data.get("siglaCasaIniciadora")
 
 with open(
@@ -74,11 +82,14 @@ with open(
         # =========================
         autores = []
 
-        for autor in d.get("documento", {}).get("autoria", []):
+        for autor in d.get("autoriaIniciativa", []):
 
             autores.append({
                 "nome": autor.get("autor"),
                 "tipo": autor.get("descricaoTipo"),
+                "sigla_tipo": autor.get("siglaTipo"),
+                "cargo": autor.get("cargo"),
+                "sigla_cargo": autor.get("siglaCargo"),
                 "uf": None,
                 "sexo": None
             })

@@ -1,9 +1,14 @@
 import json
-from src.models.proposicao import Autor, Tipo, Proposicao, Materia, Norma, Emenda, Relatorio
+from src.models.proposicao import Autor, Casa, Tipo, Proposicao, Materia, Norma, Emenda, Relatorio
 import pandas as pd
 from datetime import datetime
 from typing import Dict, Any
 from tqdm import tqdm
+import unicodedata
+from difflib import SequenceMatcher
+import re
+
+from rapidfuzz import fuzz
 
 def parse_datetime(dt: str) -> datetime:
     if not dt:
@@ -27,12 +32,12 @@ def parse_tipo(tipo: str) -> str:
     return tipo
     
 def parse_sigla_tipo(sigla: str) -> str:
-    if sigla in ["PRC", "PRS"]:
+    if sigla in ["PRC", "PRS", "PRF", "PRN"]:
         return "PR"
     return sigla
 
-def senado_json_to_proposicao(data: Dict[str, Any]) -> Proposicao:
-    p = Proposicao(
+def json_to_proposicao(data: Dict[str, Any]) -> Proposicao:
+    return Proposicao(
         id=data["id"],
         uri=data["uri"],
         ano=data["ano"],
@@ -77,12 +82,15 @@ def senado_json_to_proposicao(data: Dict[str, Any]) -> Proposicao:
         ) if data.get("norma_gerada") else None,
     )
 
-    m = Materia(
+
+def json_to_materia(p: Proposicao, data: Dict[str, Any]) -> Materia:
+    return Materia(
         id=0,
-        casa_iniciadora=p.casa_atual,
+        casa_iniciadora=p.casa_origem,
         tipo=p.tipo,
         sigla_tipo=p.sigla_tipo,
-        proposicao_sf=p,
+        proposicao_sf=p if p.casa_origem == Casa.SENADO else None,
+        proposicao_cd=p if p.casa_origem == Casa.CAMARA else None,
         transformada_em_norma=data.get("transformado_em_norma", False),
         norma_gerada=Norma(
             nome=data["norma_gerada"]["nome"],
@@ -93,7 +101,59 @@ def senado_json_to_proposicao(data: Dict[str, Any]) -> Proposicao:
             ),
         ) if data.get("norma_gerada") else None,
     )
-    return m
+
+def normalizar(texto):
+    if pd.isna(texto):
+        return None
+    
+    texto = texto.lower()
+    
+    # remove acentos
+    texto = unicodedata.normalize('NFKD', texto)
+    texto = ''.join(c for c in texto if not unicodedata.combining(c))
+    
+    # remove (2ª autuação) etc
+    texto = re.sub(r"\(.*?\)", "", texto)
+    
+    # remove pontuação
+    texto = re.sub(r"[^\w\s]", "", texto)
+    
+    # normaliza espaços
+    texto = re.sub(r"\s+", " ", texto)
+    
+    return texto.strip()
+
+
+def similar(a, b):
+    if pd.isna(a) or pd.isna(b):
+        return 0
+    
+    return SequenceMatcher(None, str(a), str(b)).ratio()
+
+def similarity_match(row):
+    return (
+        row['sim'] > 0.9 or
+        row['sim_partial'] > 0.9 or
+        row['sim_token'] > 0.85
+    )
+
+
+def merge_prns(prns_cd, prns_sf):
+    merged = []
+    for prn_cd in prns_cd:
+        melhor_match = None
+        melhor_score = 0.0
+        
+        for prn_sf in prns_sf:
+            score = similar(prn_cd.nome, prn_sf.nome)
+            if score > melhor_score:
+                melhor_score = score
+                melhor_match = prn_sf
+        
+        if melhor_score > 0.8:  # threshold de similaridade
+            merged.append((prn_cd, melhor_match, melhor_score))
+    
+    return merged
 
 
 with open("data/senado/proposicoes_normalizadas.json", "r", encoding="utf-8") as f:
@@ -102,12 +162,98 @@ with open("data/senado/proposicoes_normalizadas.json", "r", encoding="utf-8") as
 with open("data/camara/proposicoes_normalizadas.json", "r", encoding="utf-8") as f:
     proposicoes_cd = json.load(f)
 
-for p in tqdm(proposicoes_sf):
+prn_cd_por_nome = {p["nome"]: p for p in proposicoes_cd if p["sigla_tipo"] == "PRN"}
+prn_sf_por_nome = {p["nome"]: p for p in proposicoes_sf if p["sigla_tipo"] == "PRN"}
+
+props_cd = pd.read_json("data/camara/proposicoes_normalizadas.json", encoding="utf-8")
+props_sf = pd.read_json("data/senado/proposicoes_normalizadas.json", encoding="utf-8")
+
+
+# Merge PRNs
+
+resolucoes_cn_cd = props_cd[props_cd.sigla_tipo.isin(["PRN"])].copy().reset_index(drop=True)
+resolucoes_cn_sf = props_sf[props_sf.sigla_tipo.isin(["PRN"])].copy().reset_index(drop=True)
+
+prns_merge = resolucoes_cn_cd.merge(resolucoes_cn_sf,
+    on='nome',
+    how='inner',
+    suffixes=('_df1', '_df2')
+)
+
+
+prns_merge['e1'] = prns_merge['ementa_df1'].apply(normalizar)
+prns_merge['e2'] = prns_merge['ementa_df2'].apply(normalizar)
+
+# -------------------------
+# Similaridades (rápido)
+# -------------------------
+prns_merge['sim'] = [
+    similar(a, b) for a, b in zip(prns_merge['e1'], prns_merge['e2'])
+]
+
+prns_merge['sim_partial'] = [
+    fuzz.partial_ratio(a, b) for a, b in zip(prns_merge['e1'], prns_merge['e2'])
+]
+
+prns_merge['sim_token'] = [
+    fuzz.token_set_ratio(a, b) for a, b in zip(prns_merge['e1'], prns_merge['e2'])
+]
+
+# -------------------------
+# Match inteligente
+# -------------------------
+prns_merge['match'] = prns_merge.apply(similarity_match, axis=1)
+
+# -------------------------
+# 🎯 INTERSEÇÃO FINAL
+# -------------------------
+nomes_intersecao = prns_merge.loc[prns_merge['match'], 'nome'].tolist()
+
+print("Total na interseção inteligente:", len(nomes_intersecao), nomes_intersecao)
+
+materias = []
+
+for nome in nomes_intersecao:
+    data_cd = prn_cd_por_nome.get(nome)
+    data_sf = prn_sf_por_nome.get(nome)
+    
+    if not data_cd or not data_sf:
+        continue
+    print(data_cd)
+    p_cd = json_to_proposicao(data_cd)
+    print(p_cd)
+    print(data_sf)
+
+    p_sf = json_to_proposicao(data_sf)
+    
+    materia = Materia(
+        id=0,
+        casa_iniciadora=p_cd.casa_origem or p_sf.casa_origem,
+        tipo=p_cd.tipo,
+        sigla_tipo=p_cd.sigla_tipo,
+        
+        proposicao_cd=p_cd,
+        proposicao_sf=p_sf,
+        
+        transformada_em_norma=(
+            data_cd.get("transformado_em_norma", False) or
+            data_sf.get("transformado_em_norma", False)
+        ),
+        
+        norma_gerada=(
+            json_to_materia(p_cd, data_cd).norma_gerada
+            or json_to_materia(p_sf, data_sf).norma_gerada
+        )
+    )
+    
+    materias.append(materia)
+
+""" for p in tqdm(proposicoes_sf):
     if p["sigla_tipo"] in ["PRS"]:
-        a = senado_json_to_proposicao(p)
+        a = json_to_proposicao(p)
 
 for p in tqdm(proposicoes_cd):
-    if p["sigla_tipo"] in ["PRC"]:
+    if p["sigla_tipo"] in ["PRC", "PRF"]:
         print(p)
-        a = senado_json_to_proposicao(p)
-print(a)
+        a = json_to_proposicao(p)
+print(a) """
