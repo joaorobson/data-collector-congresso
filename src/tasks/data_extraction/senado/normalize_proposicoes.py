@@ -24,18 +24,41 @@ def parse_datetime(valor):
         print(f"[parse_datetime] erro ao converter: {valor} | erro: {e}")
         return None
 
-def get_casa_origem(data: dict) -> str:
-    sigla = data.get("sigla")
-    if sigla == "PRS":
+def get_casa_origem(data: dict, autores) -> str:
+    if data.get("sigla") == "PRS":
         return "SF"
-    elif set([a.get("siglaCargo") for a in data.get("autoriaIniciativa", [])]) == {"DEPUTADO"}:
-        return "SF"
-    elif set([a.get("siglaCargo") for a in data.get("autoriaIniciativa", [])]) == {"SENADOR"}:
+
+    cargos = {
+        a.get("sigla_cargo")
+        for a in autores
+        if a.get("sigla_cargo")
+    }
+
+    tipos = {
+        a.get("sigla_tipo")
+        for a in autores
+        if a.get("sigla_tipo")
+    }
+
+    if cargos == {"DEPUTADO"}:
         return "CD"
-    elif set([a.get("siglaTipo") for a in data.get("autoriaIniciativa", [])]) == {"COMISSAO_SENADO_CAMARA"}:
+
+    if cargos == {"SENADOR"}:
+        return "SF"
+
+    if tipos == {"COMISSAO_SENADO"}:
+        return "SF"
+
+    if cargos in ({"DEPUTADO", "SENADOR"},):
         return "CN"
-    elif set([a.get("siglaTipo") for a in data.get("autoriaIniciativa", [])]) == {"COMISSAO_CONGRESSO"}:
+
+    if tipos in (
+        {"MESAS_SF_CD"},
+        {"COMISSAO_SENADO_CAMARA"},
+        {"COMISSAO_CONGRESSO"}
+    ):
         return "CN"
+
     return data.get("siglaCasaIniciadora")
 
 with open(
@@ -82,18 +105,30 @@ with open(
         # =========================
         autores = []
 
-        for autor in d.get("autoriaIniciativa", []):
+        if d.get("autoriaIniciativa"):
 
-            autores.append({
-                "nome": autor.get("autor"),
-                "tipo": autor.get("descricaoTipo"),
-                "sigla_tipo": autor.get("siglaTipo"),
-                "cargo": autor.get("cargo"),
-                "sigla_cargo": autor.get("siglaCargo"),
-                "uf": None,
-                "sexo": None
-            })
+            for autor in d.get("autoriaIniciativa", []):
 
+                autores.append({
+                    "nome": autor.get("autor"),
+                    "tipo": autor.get("descricaoTipo"),
+                    "sigla_tipo": autor.get("siglaTipo"),
+                    "cargo": autor.get("cargo"),
+                    "sigla_cargo": autor.get("siglaCargo"),
+                    "uf": None,
+                    "sexo": None
+                })
+        elif d.get("documento", {}).get("autoria"):
+            for autor in d.get("documento", {}).get("autoria", []):
+                autores.append({
+                    "nome": autor.get("autor"),
+                    "tipo": autor.get("descricaoTipo"),
+                    "sigla_tipo": autor.get("siglaTipo"),
+                    "cargo": autor.get("cargo"),
+                    "sigla_cargo": autor.get("siglaCargo"),
+                    "uf": None,
+                    "sexo": None
+                })
         # =========================
         # SITUAÇÃO
         # =========================
@@ -188,7 +223,7 @@ with open(
             "situacao_atual": situacao_atual,
             "em_tramitacao": tramitando,
             "casa_atual": d.get("casaIdentificadora"),
-            "casa_origem": get_casa_origem(d),
+            "casa_origem": get_casa_origem(d, autores),
             "outros_nomes": outros_nomes,
             "transformado_em_norma": transformado_em_norma,
             "norma_gerada": norma_gerada,

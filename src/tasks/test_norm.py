@@ -213,6 +213,86 @@ print("Total na interseção inteligente:", len(nomes_intersecao), nomes_interse
 
 materias = []
 
+nomes_cd = set(resolucoes_cn_cd["nome"])
+nomes_sf = set(resolucoes_cn_sf["nome"])
+
+nomes_intersecao_set = set(nomes_intersecao)
+
+# Apenas CD
+nomes_somente_cd = nomes_cd - nomes_intersecao_set
+
+# Apenas SF
+nomes_somente_sf = nomes_sf - nomes_intersecao_set
+
+print("Somente CD:", len(nomes_somente_cd))
+print("Somente SF:", len(nomes_somente_sf))
+
+# -------------------------
+# Adiciona PRNs somente CD
+# -------------------------
+
+for nome in nomes_somente_cd:
+    data_cd = prn_cd_por_nome.get(nome)
+
+    if not data_cd:
+        continue
+    print(data_cd)
+    p_cd = json_to_proposicao(data_cd)
+
+    materia = Materia(
+        id=0,
+        casa_iniciadora=p_cd.casa_origem,
+        tipo=p_cd.tipo,
+        sigla_tipo=p_cd.sigla_tipo,
+
+        proposicao_cd=p_cd,
+        proposicao_sf=None,
+
+        transformada_em_norma=data_cd.get(
+            "transformado_em_norma", False
+        ),
+
+        norma_gerada=json_to_materia(
+            p_cd,
+            data_cd
+        ).norma_gerada
+    )
+
+    materias.append(materia)
+
+# -------------------------
+# Adiciona PRNs somente SF
+# -------------------------
+
+for nome in nomes_somente_sf:
+    data_sf = prn_sf_por_nome.get(nome)
+
+    if not data_sf:
+        continue
+    print(data_sf)
+    p_sf = json_to_proposicao(data_sf)
+
+    materia = Materia(
+        id=0,
+        casa_iniciadora=p_sf.casa_origem,
+        tipo=p_sf.tipo,
+        sigla_tipo=p_sf.sigla_tipo,
+
+        proposicao_cd=None,
+        proposicao_sf=p_sf,
+
+        transformada_em_norma=data_sf.get(
+            "transformado_em_norma", False
+        ),
+
+        norma_gerada=json_to_materia(
+            p_sf,
+            data_sf
+        ).norma_gerada
+    )
+
+    materias.append(materia)
+
 for nome in nomes_intersecao:
     data_cd = prn_cd_por_nome.get(nome)
     data_sf = prn_sf_por_nome.get(nome)
