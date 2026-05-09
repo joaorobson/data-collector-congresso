@@ -7,6 +7,7 @@ from tqdm import tqdm
 import unicodedata
 from difflib import SequenceMatcher
 import re
+import numpy as np
 
 from rapidfuzz import fuzz
 
@@ -165,8 +166,8 @@ with open("data/camara/proposicoes_normalizadas.json", "r", encoding="utf-8") as
 prn_cd_por_nome = {p["nome"]: p for p in proposicoes_cd if p["sigla_tipo"] == "PRN"}
 prn_sf_por_nome = {p["nome"]: p for p in proposicoes_sf if p["sigla_tipo"] == "PRN"}
 
-props_cd = pd.read_json("data/camara/proposicoes_normalizadas.json", encoding="utf-8")
-props_sf = pd.read_json("data/senado/proposicoes_normalizadas.json", encoding="utf-8")
+props_cd = pd.read_json("data/camara/proposicoes_normalizadas.json", encoding="utf-8").replace({np.nan: None})
+props_sf = pd.read_json("data/senado/proposicoes_normalizadas.json", encoding="utf-8").replace({np.nan: None})
 
 
 # Merge PRNs
@@ -327,6 +328,75 @@ for nome in nomes_intersecao:
     )
     
     materias.append(materia)
+
+
+prcs_cd = props_cd[props_cd.sigla_tipo.isin(["PRC", "PRF"])].copy()
+prss_sf = props_sf[props_sf.sigla_tipo.isin(["PRS"])].copy()
+
+print("Total PRC/PRF:", len(prcs_cd))
+print("Total PRS:", len(prss_sf))
+
+# -------------------------
+# Adiciona PRCs
+# -------------------------
+
+for _, row in prcs_cd.iterrows():
+    data_cd = row.to_dict()
+    print(data_cd)
+    p_cd = json_to_proposicao(data_cd)
+
+    materia = Materia(
+        id=0,
+        casa_iniciadora=p_cd.casa_origem,
+        tipo=p_cd.tipo,
+        sigla_tipo=p_cd.sigla_tipo,
+
+        proposicao_cd=p_cd if p_cd.casa_origem == Casa.CAMARA else None,
+        proposicao_sf=p_cd if p_cd.casa_origem == Casa.SENADO else None,
+
+        transformada_em_norma=data_cd.get(
+            "transformado_em_norma", False
+        ),
+
+        norma_gerada=json_to_materia(
+            p_cd,
+            data_cd
+        ).norma_gerada
+    )
+
+    materias.append(materia)
+
+# -------------------------
+# Adiciona PRSs
+# -------------------------
+
+for _, row in prss_sf.iterrows():
+    data_sf = row.to_dict()
+
+    p_sf = json_to_proposicao(data_sf)
+
+    materia = Materia(
+        id=0,
+        casa_iniciadora=p_sf.casa_origem,
+        tipo=p_sf.tipo,
+        sigla_tipo=p_sf.sigla_tipo,
+
+        proposicao_cd=None,
+        proposicao_sf=p_sf,
+
+        transformada_em_norma=data_sf.get(
+            "transformado_em_norma", False
+        ),
+
+        norma_gerada=json_to_materia(
+            p_sf,
+            data_sf
+        ).norma_gerada
+    )
+
+    materias.append(materia)
+
+print("Total de matérias:", len(materias))
 
 """ for p in tqdm(proposicoes_sf):
     if p["sigla_tipo"] in ["PRS"]:
