@@ -177,7 +177,7 @@ with open(
                 f"{d.get('numero')}/"
                 f"{d.get('ano')}"
             ),
-            "nome_inicial": situacao_e_nome_origem_dict.get("nome_origem"),
+            "nome_inicial": situacao_e_nome_origem_dict.get(str(d.get("id")), {}).get("nome_origem"),
             "numero": d.get("numero"),
             "ementa": ementa,
             "data_apresentacao": data_apresentacao,
