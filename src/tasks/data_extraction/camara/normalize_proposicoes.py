@@ -13,9 +13,22 @@ def parse_datetime(valor):
     except:
         return None
 
-def get_casa_origem(data: dict) -> str:
+def get_cargo_tipo(autor: dict):
+    if autor['tipo'] in ('Deputado(a)', 'MISTA CPI', 'Plenário Virtual CN', 'COMISSÃO ESPECIAL') or autor['nome'] in ('Câmara dos Deputados', 'Poder Executivo'):
+        return "CD"
+    elif "Senado Federal" in autor['nome']:
+        return "SF"
+
+
+def get_casa_origem(data: dict, autores) -> str:
     sigla = data.get("siglaTipo")
     if sigla == "PRF":
+        return "SF"
+    cargos = set([get_cargo_tipo(autor) for autor in autores])
+    
+    if cargos == {"CD"}:
+        return "CD"
+    elif cargos == {"SF"}:
         return "SF"
     return "CD"
 
@@ -186,7 +199,7 @@ with open(
             "situacao_atual": situacao_atual,
             "em_tramitacao": em_tramitacao,
             "casa_atual": "CD",
-            "casa_origem": get_casa_origem(d),
+            "casa_origem": get_casa_origem(d, autores),
             "transformado_em_norma": transformado_em_norma,
             "norma_gerada": norma_gerada,
 
