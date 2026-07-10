@@ -2,7 +2,7 @@
 
 ## Normas
 
-
+![Coleta de dados](https://github.com/joaorobson/data-collector-congresso/blob/main/data/img/coleta_dados.png)
 
 ### Coleta da lista de normas a partir do LeXML
 
