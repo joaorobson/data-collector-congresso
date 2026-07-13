@@ -46,6 +46,9 @@ def get_casa_origem(data: dict, autores) -> str:
     if cargos == {"SENADOR"}:
         return "SF"
 
+    if tipos in ({"CAMARA"}, {"PRESIDENTE_REPUBLICA"}):
+        return "CD"
+
     if tipos == {"COMISSAO_SENADO"}:
         return "SF"
 
