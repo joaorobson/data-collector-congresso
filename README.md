@@ -32,18 +32,37 @@
     python -m src.tasks.data_extraction.normas.collect_proposicoes_de_origem_from_normas_leg_br
     ```
 
-### Coleta das proposições sem origem no portal normas.leg.br
+### Coleta das proposições sem origem dos Dados Abertos do SF
 
-* Fonte: [Dados Abertos do SF]()
+* Fonte: [Dados Abertos do SF](https://legis.senado.leg.br/dadosabertos/api-docs/swagger-ui/index.html)
+* Campos coletados:
+  * identificacao (nome da proposição)
+
 * Script:
-src\tasks\data_extraction\normas\collect_proposicao_de_origem_from_sf.py
+    ```
+    python -m src.tasks.data_extraction.normas.collect_proposicao_de_origem_from_sf
+    ```
 
 
 ### Coleta das proposições das Resoluções da CD
-* src\tasks\data_extraction\normas\collect_urls_projetos_resolucao_cd.py
-* src\tasks\data_extraction\normas\collect_infos_projetos_resolucao_cd.py
-* src\tasks\data_extraction\normas\collect_projetos_resolucao_cd_transf_norma.py
-
-* 
+* Fonte: [Dados Abertos da CD](https://dadosabertos.camara.leg.br/swagger/api.html)
+* Campos coletados:
+  * id
+  * nomeProposicao
+  * situacao
+  * nome_norma
+* Scripts:
+  *  Coleta de URLs dos Projetos de Resolução da CD:
+      ```
+      python -m src.tasks.data_extraction.normas.collect_urls_projetos_resolucao_cd
+      ```
+  * Coleta dos dados dos Projetos de Resolução da CD:
+      ```
+      python -m src.tasks.data_extraction.normas.collect_infos_projetos_resolucao_cd
+      ``` 
+  * Coleta dos Projetos de Resolução da CD transformados em norma:
+      ```
+      python -m src.tasks.data_extraction.normas.collect_projetos_resolucao_cd_transf_norma
+      ```
 
 ### Proposições
