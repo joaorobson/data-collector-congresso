@@ -5,7 +5,7 @@ from src.shared.async_collector import AsyncCollector
 
 
 async def main():
-    input_path = 'data/senado/metadados/info_proposicoes.json'
+    input_path = 'data/senado/metadados/proposicoes.json'
     output_path = 'data/senado/metadados/detalhes_proposicoes.json'
 
     if not os.path.exists(input_path):

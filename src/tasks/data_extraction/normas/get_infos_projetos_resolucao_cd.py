@@ -4,7 +4,7 @@ import asyncio
 
 
 async def main():
-    with open("data/normas/metadados//metadados/urls_projetos_resolucao_cd.json", "r") as f:
+    with open("data/normas/metadados/urls_projetos_resolucao_cd.json", "r") as f:
         urls = json.load(f)
 
     print(f"Iniciando coleta de {len(urls)} páginas...")
@@ -21,7 +21,7 @@ async def main():
     print(f"\n✅ Total de proposições coletadas: {len(proposicoes_final)}")
     
     # Salva apenas a lista de proposições (mais limpo)
-    with open("data/normas/metadados//metadados/infos_projetos_resolucao_cd.json", "w", encoding="utf-8") as f:
+    with open("data/normas/metadados/metadados/infos_projetos_resolucao_cd.json", "w", encoding="utf-8") as f:
         json.dump(proposicoes_final, f, ensure_ascii=False, indent=2)
 
 if __name__ == "__main__":

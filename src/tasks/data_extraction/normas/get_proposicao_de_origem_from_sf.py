@@ -146,7 +146,7 @@ async def fetch_norma(session, semaforo, norma):
 async def main():
 
     with open(
-        "data/normas/metadados//normas_sem_proposicao_origem.json",
+        "data/normas/metadados/normas_sem_proposicao_origem.json",
         "r",
         encoding="utf-8"
     ) as f:
@@ -177,7 +177,7 @@ async def main():
             resultados.append(resultado)
 
     with open(
-        "data/normas/metadados//proposicoes_de_origem_da_norma_from_sf.json",
+        "data/normas/metadados/proposicoes_de_origem_da_norma_from_sf.json",
         "w",
         encoding="utf-8"
     ) as f:

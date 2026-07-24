@@ -10,21 +10,21 @@ uv sync
 
 ![Coleta de dados](https://github.com/joaorobson/data-collector-congresso/blob/main/data/img/coleta_dados.png)
 
-### Coleta da lista de normas a partir do LeXML
+### Coleta dos metadados de normas a partir do LeXML
 
 * Fonte: [LeXML](https://www.lexml.gov.br/)
 * Script: 
     ```
-    python -m src.tasks.data_extracion.normas.collect_normas
+    python -m src.tasks.data_extracion.normas.get_metadados_normas
     ```
 * **Campos coletados:**
   * tipo_norma
   * titulo
   * urn
   * relacionamentos
-* JSON de saída: [normas_2010_2025.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados//normas_2010_2025.json)
+* JSON de saída: [normas.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/normas.json)
 
-### Coleta do nome das proposições de origem da norma
+### Coleta do nome das proposições de origem da norma no portal normas.leg.br
 
 * Fonte: [normas.leg.br](https://normas.leg.br/)
 * Campos coletados:
@@ -36,21 +36,34 @@ uv sync
     * @id
 * Script:
     ```
-    python -m src.tasks.data_extraction.normas.collect_proposicoes_de_origem_from_normas_leg_br
+    python -m src.tasks.data_extraction.normas.get_proposicoes_de_origem_from_normas_leg_br
     ```
-* JSON de saída: [proposicoes_de_origem_da_norma_from_normas_leg_br.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados//proposicoes_de_origem_da_norma_from_normas_leg_br.json)
+* JSON de saída: [proposicoes_de_origem_da_norma_from_normas_leg_br.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/proposicoes_de_origem_da_norma_from_normas_leg_br.json)
 
-### Coleta do nome das proposições sem origem dos Dados Abertos do SF
+### Coleta das proposições com origem ausnte no portal normas.leg.br
+
+* Script:
+    ```
+    python -m src.tasks.data_extraction.normas.get_proposicoes_com_origem_faltante
+    ```
+* JSON de saída: [normas_sem_proposicao_origem.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/normas_sem_proposicao_origem.json)
+
+
+### Coleta do nome das proposições com origem ausente dos Dados Abertos do SF
 
 * Fonte: [Dados Abertos do SF](https://legis.senado.leg.br/dadosabertos/api-docs/swagger-ui/index.html)
+* Dados de entrada:
+  * [normas_sem_proposicao_origem.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/normas_sem_proposicao_origem.json)
 * Campos coletados:
   * identificacao (nome da proposição)
 
 * Script:
     ```
-    python -m src.tasks.data_extraction.normas.collect_proposicao_de_origem_from_sf
+    python -m src.tasks.data_extraction.normas.get_proposicao_de_origem_from_sf
     ```
-* JSON de saída: [proposicoes_de_origem_da_norma_from_sf.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados//proposicoes_de_origem_da_norma_from_sf.json)
+* JSON de saída: [proposicoes_de_origem_da_norma_from_sf.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/proposicoes_de_origem_da_norma_from_sf.json)
+
+
 
 ### Coleta do nome das proposições das Resoluções da CD
 
@@ -63,20 +76,20 @@ uv sync
 * Scripts:
   *  Coleta de URLs dos Projetos de Resolução da CD:
       ```
-      python -m src.tasks.data_extraction.normas.collect_urls_projetos_resolucao_cd
+      python -m src.tasks.data_extraction.normas.get_urls_projetos_resolucao_cd
       ```
   * Coleta dos dados dos Projetos de Resolução da CD:
       ```
-      python -m src.tasks.data_extraction.normas.collect_infos_projetos_resolucao_cd
+      python -m src.tasks.data_extraction.normas.get_infos_projetos_resolucao_cd
       ``` 
   * Coleta dos Projetos de Resolução da CD transformados em norma:
       ```
-      python -m src.tasks.data_extraction.normas.collect_projetos_resolucao_cd_transf_norma
+      python -m src.tasks.data_extraction.normas.get_projetos_resolucao_cd_transf_norma
       ```
 * JSONs de saída:
-  * [urls_projetos_resolucao_cd.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados//urls_projetos_resolucao_cd.json)
-  * [infos_projetos_resolucao_cd.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados//infos_projetos_resolucao_cd.json)
-  * [projetos_resolucao_cd_transf_norma.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados//projetos_resolucao_cd_transf_norma.json)
+  * [urls_projetos_resolucao_cd.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/urls_projetos_resolucao_cd.json)
+  * [infos_projetos_resolucao_cd.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/infos_projetos_resolucao_cd.json)
+  * [projetos_resolucao_cd_transf_norma.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/projetos_resolucao_cd_transf_norma.json)
 
 ### Normalização dos metadados das proposições
 
@@ -94,7 +107,7 @@ uv sync
     ```
     python -m src.tasks.data_extraction.normas.normalize_proposicoes_origem_normas
     ```
-* JSON de saída: [proposicoes_origem_normalizadas.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados//proposicoes_origem_normalizadas.json)
+* JSON de saída: [proposicoes_origem_normalizadas.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/proposicoes_origem_normalizadas.json)
 
 ### Proposições
 
@@ -113,9 +126,9 @@ uv sync
   * dataApresentacao
 * Script:
     ```
-    python -m src.tasks.data_extraction.camara.proposicoes_from_normas.get_infos_proposicoes_from_normas
+    python -m src.tasks.data_extraction.camara.proposicoes_from_normas.get_metadados_proposicoes_from_normas
     ```
-* JSON de saída: [info_proposicoes.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/camara/metadados/info_proposicoes.json)
+* JSON de saída: [proposicoes.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/camara/metadados/proposicoes.json)
 
 
 ##### Coletar emendas das proposições
@@ -132,9 +145,12 @@ uv sync
   * dataApresentacao
 * Script:
     ```
-    python -m src.tasks.data_extraction.camara.proposicoes_from_normas.get_infos_emendas
+    python -m src.tasks.data_extraction.camara.proposicoes_from_normas.get_metadados_emendas
     ```
-* JSON de saída: [info_proposicoes.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/camara/metadados/info_proposicoes.json)
+* JSON de saída: [emendas.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/camara/metadados/emendas.json)
+
+##### Coletar pareceres e relatórios
+
 
 
 #### Senado Federal
@@ -160,14 +176,9 @@ uv sync
   * tramitando
 * Script:
     ```
-    python -m src.tasks.data_extraction.senado.proposicoes_from_normas.get_infos_proposicoes_from_normas.py
+    python -m src.tasks.data_extraction.senado.proposicoes_from_normas.get_metadados_proposicoes_from_normas.py
     ```
-* JSON de saída: [info_proposicoes.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/senado/metadados/info_proposicoes.json)
-
-
-##### Coletar documentos das proposições
-
-
+* JSON de saída: [proposicoes.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/senado/metadados/proposicoes.json)
 
 
 ##### Coletar emendas das proposições
@@ -195,9 +206,9 @@ uv sync
     * urlDocumentoEmenda
 * Script:
     ```
-    python -m src.tasks.data_extraction.senado.proposicoes_from_normas.get_infos_emendas
+    python -m src.tasks.data_extraction.senado.proposicoes_from_normas.get_metadados_emendas
     ```
-* JSON de saída: [info_proposicoes.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/senado/metadados/emendas_proposicoes.json)
+* JSON de saída: [emendas.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/senado/metadados/emendas.json)
 
-##### Coletar textos das emendas
+##### Coletar pareceres e relatórios
 

@@ -1,9 +1,9 @@
 import json
 
-with open("data/normas/metadados//normas_2010_2025.json", "r", encoding="utf-8") as f:
+with open("data/normas/metadados/normas.json", "r", encoding="utf-8") as f:
     normas = json.load(f)
 
-with open("data/normas/metadados//proposicoes_de_origem_da_norma_from_normas_leg_br.json", "r", encoding="utf-8") as f:
+with open("data/normas/metadados/proposicoes_de_origem_da_norma_from_normas_leg_br.json", "r", encoding="utf-8") as f:
     origens = json.load(f)
 
 source_by_urn = {
@@ -42,7 +42,7 @@ print(len(sem_relacionamento_e_sem_source))
 ) """
 
 with open(
-    "data/normas/metadados//normas_sem_proposicao_origem.json",
+    "data/normas/metadados/normas_sem_proposicao_origem.json",
     "w",
     encoding="utf-8"
 ) as f:

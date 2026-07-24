@@ -10,7 +10,7 @@ URL_RELACIONADAS = (
 async def main():
     input_path = "data/camara/infos_proposicoes.json"
     tipos_path = "data/camara/sigla_tipos_emendas.json"
-    output_path = "data/camara/emendas_proposicoes.json"
+    output_path = "data/camara/emendas.json"
 
     # 1. Carrega proposições
     if not os.path.exists(input_path):

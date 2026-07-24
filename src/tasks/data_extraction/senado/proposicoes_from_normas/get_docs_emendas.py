@@ -17,30 +17,16 @@ TIMEOUT = aiohttp.ClientTimeout(
     sock_read=300,
 )
 
-async def obter_url_avulso_inicial(session, id_processo):
-    url = (
-        "https://legis.senado.leg.br/dadosabertos/processo/documento"
-        f"?idProcesso={id_processo}"
-        "&siglaTipo=AVULSO_INICIAL"
-        "&v=1"
-    )
 
-    async with session.get(url) as response:
-
-        if response.status != 200:
-            return None
-
-        dados = await response.json()
-
-        if not dados:
-            return None
-
-        return dados[0].get("urlDocumento")
-
-async def baixar_pdf(session, proposicao, id_processo, url, caminho_destino, semaphore):
+async def baixar_pdf(
+    session,
+    identificacao,
+    url,
+    caminho_destino,
+    semaphore,
+):
     async with semaphore:
 
-        # Já existe
         if (
             os.path.isfile(caminho_destino)
             and os.path.getsize(caminho_destino) > 0
@@ -53,20 +39,10 @@ async def baixar_pdf(session, proposicao, id_processo, url, caminho_destino, sem
 
                 async with session.get(url) as response:
 
-                    # Documento inexistente
                     if response.status == 404:
-                        print(f"404 para {proposicao}. Tentando AVULSO_INICIAL...")
-
-                        nova_url = await obter_url_avulso_inicial(session, id_processo)
-
-                        if nova_url:
-                            url = nova_url
-                            continue
-
-                        print(f"Não foi encontrado AVULSO_INICIAL para {proposicao}")
+                        print(f"❌ Documento inexistente: {identificacao}")
                         return False
 
-                    # Outros erros HTTP
                     if response.status != 200:
                         raise aiohttp.ClientResponseError(
                             response.request_info,
@@ -75,14 +51,20 @@ async def baixar_pdf(session, proposicao, id_processo, url, caminho_destino, sem
                             message=response.reason,
                         )
 
+                    os.makedirs(
+                        os.path.dirname(caminho_destino),
+                        exist_ok=True,
+                    )
+
                     with open(caminho_destino, "wb") as f:
-                        async for chunk in response.content.iter_chunked(64 * 1024):
+                        async for chunk in response.content.iter_chunked(
+                            64 * 1024
+                        ):
                             f.write(chunk)
 
                         f.flush()
                         os.fsync(f.fileno())
 
-                # Confirma que o arquivo não ficou vazio
                 if (
                     not os.path.exists(caminho_destino)
                     or os.path.getsize(caminho_destino) == 0
@@ -101,17 +83,19 @@ async def baixar_pdf(session, proposicao, id_processo, url, caminho_destino, sem
                 OSError,
             ) as e:
 
-                # Remove arquivo parcial
                 try:
                     if os.path.exists(caminho_destino):
                         os.remove(caminho_destino)
                 except Exception:
                     pass
 
-                espera = min(60, (2 ** tentativa) + random.random())
+                espera = min(
+                    60,
+                    (2 ** tentativa) + random.random(),
+                )
 
                 print(
-                    f"⚠️ [{proposicao}] "
+                    f"⚠️ [{identificacao}] "
                     f"Tentativa {tentativa}/{RETRIES} "
                     f"({type(e).__name__}) "
                     f"Nova tentativa em {espera:.1f}s"
@@ -122,7 +106,7 @@ async def baixar_pdf(session, proposicao, id_processo, url, caminho_destino, sem
             except Exception as e:
 
                 print(
-                    f"❌ Erro inesperado em {proposicao}: "
+                    f"❌ Erro inesperado em {identificacao}: "
                     f"{type(e).__name__}: {e}"
                 )
 
@@ -135,7 +119,7 @@ async def baixar_pdf(session, proposicao, id_processo, url, caminho_destino, sem
                 break
 
         print(f"❌ Falha definitiva")
-        print(f"   Proposição: {proposicao}")
+        print(f"   Emenda: {identificacao}")
         print(f"   URL: {url}")
 
         return False
@@ -143,53 +127,49 @@ async def baixar_pdf(session, proposicao, id_processo, url, caminho_destino, sem
 
 async def main():
 
-    input_path = "data/senado/metadados/proposicoes.json"
-    output_dir = "data/senado/docs/proposicoes"
+    input_path = "data/senado/metadados/emendas.json"
+    output_dir = "data/senado/docs/emendas"
 
     if not os.path.exists(input_path):
         print(f"Arquivo não encontrado: {input_path}")
         return
 
-    os.makedirs(output_dir, exist_ok=True)
-
     with open(input_path, encoding="utf-8") as f:
-        proposicoes = json.load(f)
+        processos = json.load(f)
 
     downloads = []
     existentes = 0
 
-    for _, props in proposicoes.items():
+    for id_processo, processo in processos.items():
 
-        if not isinstance(props, list):
-            continue
+        for emenda in processo.get("resultado", []):
 
-        for prop in props:
+            url = emenda.get("urlDocumentoEmenda")
+            id_documento = emenda.get("idDocumentoEmenda")
 
-            for item in prop.get("resultado", []):
+            if not url or not id_documento:
+                continue
 
-                url = item.get("urlDocumento")
-                doc_id = item.get("id")
+            destino = os.path.join(
+                output_dir,
+                str(id_processo),
+                f"{id_documento}.pdf",
+            )
 
-                if not url or not doc_id:
-                    continue
+            if (
+                os.path.isfile(destino)
+                and os.path.getsize(destino) > 0
+            ):
+                existentes += 1
+                continue
 
-                destino = os.path.join(output_dir, f"{doc_id}.pdf")
-
-                if (
-                    os.path.isfile(destino)
-                    and os.path.getsize(destino) > 0
-                ):
-                    existentes += 1
-                    continue
-
-                downloads.append(
-                    {
-                        "url": url,
-                        "destino": destino,
-                        "proposicao": item.get("identificacao"),
-                        "id_processo": item.get("id"),
-                    }
-                )
+            downloads.append(
+                {
+                    "url": url,
+                    "destino": destino,
+                    "identificacao": emenda.get("identificacao"),
+                }
+            )
 
     total = existentes + len(downloads)
 
@@ -227,8 +207,7 @@ async def main():
         tarefas = [
             baixar_pdf(
                 session,
-                d["proposicao"],
-                d["id_processo"],
+                d["identificacao"],
                 d["url"],
                 d["destino"],
                 semaphore,

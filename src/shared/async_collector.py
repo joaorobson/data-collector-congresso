@@ -1,11 +1,11 @@
 import asyncio
 import aiohttp
-import json
 import logging
-from typing import List, Optional, Any, Tuple
+from typing import List, Any
 from tqdm.asyncio import tqdm
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
 
 class AsyncCollector:
     def __init__(self, max_concurrent: int = 10, retries: int = 5, timeout: int = 60):
@@ -13,50 +13,78 @@ class AsyncCollector:
         self.retries = retries
         self.timeout = aiohttp.ClientTimeout(total=timeout)
 
-    async def fetch(self, session: aiohttp.ClientSession, url: str) -> Optional[dict]:
+    async def fetch(self, session: aiohttp.ClientSession, url: str) -> dict:
         async with self.semaphore:
+            ultimo_erro = None
+
             for attempt in range(self.retries):
                 try:
                     async with session.get(url, timeout=self.timeout) as response:
+
+                        content_type = response.headers.get("Content-Type", "")
+
                         if response.status == 200:
-                            content_type = response.headers.get("Content-Type", "")
-
                             if "application/json" in content_type:
-                                return await response.json()
+                                body = await response.json()
+                            else:
+                                body = await response.text()
 
-                            # fallback: XML ou texto
-                            return await response.text()
+                            return {
+                                "status": 200,
+                                "erro": None,
+                                "resultado": body
+                            }
+
                         if response.status == 429:
                             wait = int(response.headers.get("Retry-After", 2 ** attempt))
-                            logging.warning(f"[429] {url} – aguardando {wait}s...")
+                            logging.warning(f"[429] {url} - aguardando {wait}s")
                             await asyncio.sleep(wait)
                             continue
-                        logging.error(f"[{response.status}] {url}")
-                        return None
-                except Exception as e:
-                    wait = 2 ** attempt
-                    logging.error(f"[Erro] {url} (tentativa {attempt + 1}/{self.retries}): {e}")
-                    await asyncio.sleep(wait)
-            return None
 
-    async def _fetch_and_store(self, session: aiohttp.ClientSession, url: str, index: int, results: List[Any]) -> Optional[Tuple[int, str]]:
-        result = await self.fetch(session, url)
-        if result is not None:
-            results[index] = result # Armazena o JSON bruto
-            return None
-        return (index, url)
+                        texto = await response.text()
+
+                        return {
+                            "status": response.status,
+                            "erro": texto,
+                            "resultado": []
+                        }
+
+                except Exception as e:
+                    ultimo_erro = str(e)
+                    wait = 2 ** attempt
+                    logging.error(f"[Erro] {url} ({attempt+1}/{self.retries}) {e}")
+                    await asyncio.sleep(wait)
+
+            return {
+                "status": None,
+                "erro": ultimo_erro,
+                "resultado": []
+            }
+
+    async def _fetch_and_store(
+        self,
+        session,
+        url,
+        index,
+        results
+    ):
+        results[index] = await self.fetch(session, url)
 
     async def collect(self, urls: List[str]) -> List[Any]:
-        results: List[Any] = [None] * len(urls)
+        results = [None] * len(urls)
+
         async with aiohttp.ClientSession(
-            headers={"User-Agent": "BotLegislativo/1.0", "Accept": "application/json"}
+            headers={
+                "User-Agent": "BotLegislativo/1.0",
+                "Accept": "application/json",
+            }
         ) as session:
-            tasks = [self._fetch_and_store(session, url, i, results) for i, url in enumerate(urls)]
-            failed_results = await tqdm.gather(*tasks, desc="Coletando")
-            
-            failed = [res for res in failed_results if res is not None]
-            if failed:
-                logging.info(f"🔁 Tentando novamente {len(failed)} falhas...")
-                retry_tasks = [self._fetch_and_store(session, url, i, results) for i, url in failed]
-                await tqdm.gather(*retry_tasks, desc="Retrying")
+
+            tasks = [
+                self._fetch_and_store(session, url, i, results)
+                for i, url in enumerate(urls)
+            ]
+
+            await tqdm.gather(*tasks, desc="Coletando")
+
         return results

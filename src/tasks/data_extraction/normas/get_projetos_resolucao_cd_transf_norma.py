@@ -38,8 +38,8 @@ def extrair_nome_norma(situacao):
 
 
 async def main():
-    input_path = "data/normas/metadados//infos_projetos_resolucao_cd.json"
-    output_path = "data/normas/metadados//projetos_resolucao_cd_transf_norma.json"
+    input_path = "data/normas/metadados/infos_projetos_resolucao_cd.json"
+    output_path = "data/normas/metadados/projetos_resolucao_cd_transf_norma.json"
 
     with open(input_path, "r", encoding="utf-8") as f:
         proposicoes = json.load(f)

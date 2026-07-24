@@ -50,7 +50,7 @@ async def fetch_norma(session, semaforo, urn):
 
 async def main():
 
-    with open("data/normas/metadados//normas_2010_2025.json", "r", encoding="utf-8") as f:
+    with open("data/normas/metadados/normas.json", "r", encoding="utf-8") as f:
         normas = json.load(f)
 
     urns = [
@@ -83,7 +83,7 @@ async def main():
             resultados.append(resultado)
 
     with open(
-        "data/normas/metadados//proposicoes_de_origem_da_norma_from_normas_leg_br.json",
+        "data/normas/metadados/proposicoes_de_origem_da_norma_from_normas_leg_br.json",
         "w",
         encoding="utf-8"
     ) as f:

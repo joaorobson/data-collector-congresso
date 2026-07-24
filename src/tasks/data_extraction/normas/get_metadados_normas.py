@@ -13,7 +13,8 @@ tipos = [
 ]
 
 url_base = "https://www.lexml.gov.br/busca/search"
-
+YEAR_MIN = 2010
+YEAR_MAX = 2025
 # 1. Lista que vai guardar todos os documentos de todos os tipos
 dados_coletados = []
 
@@ -30,8 +31,8 @@ for tipo in tipos:
         params = {
             "f6-autoridade": "Federal" if tipo != "Resolução" else "Federal::Legislativo",
             "f7-tipoDocumento": tipo_documento,
-            "year": "2010",
-            "year-max": "2025",
+            "year": str(YEAR_MIN),
+            "year-max": str(YEAR_MAX),
             "raw": "1",
             "startDoc": start_doc
         }
@@ -73,7 +74,7 @@ for tipo in tipos:
             print(f"Erro: {e}")
             break
 
-with open("data/normas/metadados//normas_2010_2025.json", "w", encoding="utf-8") as f:
+with open("data/normas/metadados/normas.json", "w", encoding="utf-8") as f:
     json.dump(dados_coletados, f, indent=4, ensure_ascii=False)
 
 print("\nTotal de normas coletadas:", len(dados_coletados))

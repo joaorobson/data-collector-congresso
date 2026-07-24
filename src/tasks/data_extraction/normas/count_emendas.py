@@ -1,9 +1,9 @@
 import json
 
-with open("data/camara/normas_2010_2024/emendas_proposicoes.json", encoding="utf-8") as f:
+with open("data/camara/metadados/emendas.json", encoding="utf-8") as f:
     emendas_camara = json.load(f)
 
-with open("data/senado/normas_2010_2024/emendas_proposicoes.json", encoding="utf-8") as f:
+with open("data/senado/metadados/emendas.json", encoding="utf-8") as f:
     emendas_senado = json.load(f)
 
 urns = {}

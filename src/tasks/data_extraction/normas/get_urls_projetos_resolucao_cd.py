@@ -75,7 +75,7 @@ async def main():
     print(f"✅ Total de URLs geradas: {len(all_urls)}")
     
     # Salvar a lista de URLs
-    with open("data/normas/metadados//urls_projetos_resolucao_cd.json", "w", encoding="utf-8") as f:
+    with open("data/normas/metadados/urls_projetos_resolucao_cd.json", "w", encoding="utf-8") as f:
         json.dump(all_urls, f, ensure_ascii=False, indent=2)
 
 if __name__ == "__main__":

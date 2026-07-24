@@ -5,10 +5,9 @@ import time
 from pathlib import Path
 from src.shared.async_collector import AsyncCollector
 
-INPUT_FILE = "data/normas/metadados//proposicoes_origem_normalizadas.json"
-OUTPUT_FILE = "data/camara/metadados/info_proposicoes.json"
-
-BASE_URL = "https://dadosabertos.camara.leg.br/api/v2/proposicoes"
+INPUT_FILE = "data/normas/metadados/proposicoes_origem_normalizadas.json"
+OUTPUT_FILE = "data/senado/metadados/proposicoes.json"
+BASE_URL = "https://legis.senado.gov.br/dadosabertos/processo"
 
 PATTERN = re.compile(r"([A-Z]+)\s+(\d+A?)/(\d{4})")
 
@@ -21,6 +20,8 @@ async def main():
 
     urls = []
     metadata = []
+
+    # já inicializa tudo
     resultados = {}
 
     for urn, prop in proposicoes_origem.items():
@@ -46,8 +47,8 @@ async def main():
                 "ano": ano,
             }
 
-            # Se for claramente Senado, não consulta Câmara
-            if casa == "SF":
+            # Se for Câmara, não consulta Senado
+            if casa == "CD":
                 resultados[urn].append({
                     **registro_base,
                     "resultado": []
@@ -56,11 +57,9 @@ async def main():
 
             url = (
                 f"{BASE_URL}?"
-                f"siglaTipo={sigla}&"
+                f"sigla={sigla}&"
                 f"numero={numero}&"
-                f"ano={ano}&"
-                f"ordem=ASC&"
-                f"ordenarPor=id"
+                f"ano={ano}&v=1"
             )
 
             urls.append(url)
@@ -71,13 +70,9 @@ async def main():
                 **registro_base
             })
 
-    print(f"🚀 Coletando {len(urls)} proposições da Câmara...")
+    print(f"🚀 Coletando {len(urls)} proposições do Senado...")
 
-    collector = AsyncCollector(
-        max_concurrent=15,
-        retries=3
-    )
-
+    collector = AsyncCollector(max_concurrent=20, retries=3)
     raw_results = await collector.collect(urls)
 
     for meta, res in zip(metadata, raw_results):
