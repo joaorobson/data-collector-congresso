@@ -27,6 +27,7 @@ MAPA_SIGLAS = {
 
 MAPA_CASAS = {
     "Projeto de Lei do Senado": "SF",
+    "Projeto de Lei Complementar do Senado": "SF",
     "Projeto de Lei da Câmara": "SF",
     "Projeto de Lei (CD)": "CD",
     "Projeto Lei Complementar (CD)": "CD",
@@ -89,7 +90,10 @@ def normalize_origin(origins, urn=None):
         ):
             sigla = "PLP"
             tipo = "Projeto Lei Complementar (CD)"
-        elif "Projeto de Lei" in origin_clean and ("(Substitutivo-CD)" in origin_clean or "(Emenda-CD)" in origin_clean):
+        elif "Projeto de Lei Complementar" in origin_clean and ("(Substitutivo-CD)" in origin_clean):
+            sigla = "PLP"
+            tipo = "Projeto de Lei Complementar do Senado"
+        elif "Projeto de Lei" in origin_clean and ("(Substitutivo-CD)" in origin_clean):
             sigla = "PL"
             tipo = "Projeto de Lei do Senado"
         else:
@@ -110,6 +114,9 @@ def normalize_origin(origins, urn=None):
 
 
 
+import re
+
+
 def normalizar_numero(numero):
     if numero is None:
         return ""
@@ -119,6 +126,7 @@ def normalizar_numero(numero):
     if m:
         return f"{int(m.group(1))}{m.group(2)}"
     return numero
+
 
 def extract_origin_from_sf(dados_ou_resposta, incluir_vetos=True):
     if isinstance(dados_ou_resposta, dict):
@@ -131,19 +139,22 @@ def extract_origin_from_sf(dados_ou_resposta, incluir_vetos=True):
     if not itens:
         return []
 
-    # --- PASSO 1: Descobrir o início e a Casa Iniciadora (Tratando Nulos) ---
+    # --- PASSO 1: Descobrir o início e a Casa Iniciadora (Tratando Nulos e Normalizando) ---
     primeiro_no = itens[0]
     identificacao_inicial = primeiro_no.get("identificacaoProcessoInicial")
     casa_iniciadora = primeiro_no.get("siglaCasaIniciadora")
     objetivo = primeiro_no.get("objetivo")
 
-    # Se não houver processo inicial explícito (ex: Decreto Legislativo/PDN no CN),
-    # assume a identificação e a casa do próprio primeiro nó
     if not identificacao_inicial:
         identificacao_inicial = primeiro_no.get("identificacao")
         casa_iniciadora = primeiro_no.get("casaIdentificadora") or "CN"
 
-    # Define se nasceu no SF ou CN (ambos tratados na trilha direta)
+    # Aplica a normalização de pontos na proposição inicial
+    if identificacao_inicial:
+        identificacao_inicial = re.sub(
+            r"(?<=\d)\.(?=\d)", "", identificacao_inicial
+        )
+
     nasceu_no_sf_ou_cn = (
         casa_iniciadora in ("SF", "CN")
         or objetivo == "Iniciadora"
@@ -252,7 +263,7 @@ def extract_origin_from_sf(dados_ou_resposta, incluir_vetos=True):
 def normalize_origin_from_sf(data):
     return [o["proposicao"] for o in data], [o["casa"] for o in data]
 
-EDGE_CASES = {"urn:lex:br:federal:lei.complementar:2019-04-08;166": 2}
+EDGE_CASES = {"urn:lex:br:federal:lei.complementar:2019-04-08;166": 0}
 
 def get_final_origin(*opcoes):
     """
@@ -388,9 +399,9 @@ for norma in tqdm(normas):
 
     origem_sf_norm, casas_sf = normalize_origin_from_sf(origem_sf)
     opcoes = [
+        (origem_sf_norm, casas_sf),
         (origem_normas_leg_br_norm, casas_normas_leg_br),
         (origem_lexml_norm, casas_lexml),
-        (origem_sf_norm, casas_sf),
         (origem_cd_norm, casas_cd)]
 
     if urn in EDGE_CASES:
