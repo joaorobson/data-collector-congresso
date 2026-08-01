@@ -6,13 +6,13 @@ from pathlib import Path
 
 from src.shared.async_collector import AsyncCollector
 
-
 INPUT_FILE = "data/normas/metadados/proposicoes_origem_normalizadas.json"
 OUTPUT_FILE = "data/senado/metadados/proposicoes.json"
 
 BASE_URL = "https://legis.senado.gov.br/dadosabertos/processo"
 
 PATTERN = re.compile(r"([A-Z]+)\s+(\d+A?)/(\d{4})")
+
 
 def precisa_coletar(registro_existente) -> bool:
     """Verifica se o registro precisa ser consultado.
@@ -65,6 +65,7 @@ def criar_registro(
         "resultado": resultado,
     }
 
+
 def normalizar_payload_senado(resposta_collector):
     """Extrai o corpo retornado pelo AsyncCollector e padroniza sob a chave 'dados'."""
     if not isinstance(resposta_collector, dict):
@@ -72,17 +73,15 @@ def normalizar_payload_senado(resposta_collector):
 
     corpo = resposta_collector.get("resultado")
 
-    # 1. Se o retorno da API for uma lista diretamente no topo (ex: [{ "id": 7790932, ... }])
+    # 1. Se o retorno da API for uma lista diretamente no topo
     if isinstance(corpo, list):
         return {"dados": corpo}
 
     # 2. Se o retorno for um dicionário
     if isinstance(corpo, dict):
-        # Se já estiver padronizado
         if "dados" in corpo:
             return corpo
 
-        # Se for o formato de pesquisa /materia ou /processo com nó interno
         if "processo" in corpo:
             proc = corpo.get("processo")
             return {"dados": [proc] if isinstance(proc, dict) else proc}
@@ -94,7 +93,6 @@ def normalizar_payload_senado(resposta_collector):
             )
             return {"dados": [mat] if isinstance(mat, dict) else mat}
 
-        # Dicionário único (ex: payload de um único item)
         return {"dados": [corpo]}
 
     return {"dados": []}
@@ -106,10 +104,6 @@ async def main():
     input_path = Path(INPUT_FILE)
     output_path = Path(OUTPUT_FILE)
 
-    # ==========================================================
-    # LÊ O ARQUIVO DE ORIGEM
-    # ==========================================================
-
     if not input_path.exists():
         raise FileNotFoundError(
             f"❌ Arquivo de entrada não encontrado:\n{input_path}"
@@ -117,10 +111,6 @@ async def main():
 
     with input_path.open("r", encoding="utf-8") as file:
         proposicoes_origem = json.load(file)
-
-    # ==========================================================
-    # LÊ OS RESULTADOS JÁ SALVOS
-    # ==========================================================
 
     resultados = {}
 
@@ -137,73 +127,95 @@ async def main():
     else:
         print("📂 Nenhum arquivo anterior encontrado. Iniciando nova coleta.")
 
+    urls = []
+    metadata = []
+
+    total_outras_casas = 0
+    total_sf_mantidos = 0
+    total_sf_coletar = 0
+
     # ==========================================================
     # PREPARA AS CONSULTAS
     # ==========================================================
 
-    urls = []
-    metadata = []
-
-    total_mantidos = 0
-    total_cd_ignorados = 0
-
     for urn, prop in proposicoes_origem.items():
         origens = prop.get("origem_final") or []
-        casas = prop.get("casas") or [None] * len(origens)
+        casas = prop.get("casas") or []
 
         registros_atuais = resultados.get(urn, [])
         novos_registros = []
 
         for idx, (origem, casa) in enumerate(zip(origens, casas)):
-            match = PATTERN.search(origem)
-
-            if not match:
-                print(f"⚠️ Não foi possível interpretar: {origem}")
-                continue
-
-            sigla, numero, ano = match.groups()
-
-            # ==================================================
-            # NÃO CONSULTA PROPOSIÇÕES DA CÂMARA
-            # ==================================================
-            if casa == "CD":
-                total_cd_ignorados += 1
-                registro_existente = (
-                    registros_atuais[idx]
-                    if idx < len(registros_atuais)
-                    else None
-                )
-
-                if registro_existente:
-                    novos_registros.append(registro_existente)
-                else:
-                    novos_registros.append(
-                        {
-                            "origem": origem,
-                            "casa": casa,
-                            "sigla": sigla,
-                            "numero": numero,
-                            "ano": ano,
-                            "resultado": {"dados": []},
-                        }
-                    )
-                continue
-
-            # ==================================================
-            # CONSULTA SOMENTE REGISTROS SEM RESULTADO
-            # ==================================================
             registro_existente = (
                 registros_atuais[idx] if idx < len(registros_atuais) else None
             )
 
-            if not precisa_coletar(registro_existente):
-                novos_registros.append(registro_existente)
-                total_mantidos += 1
+            # --------------------------------------------------
+            # OUTRAS CASAS (CD, PR, CN, etc.):
+            # Não rodam a Regex nem consultam a API do Senado.
+            # --------------------------------------------------
+            if casa != "SF" and casa != "CN":
+                total_outras_casas += 1
+                if registro_existente:
+                    novos_registros.append(registro_existente)
+                else:
+                    novos_registros.append(
+                        criar_registro(
+                            urn=urn,
+                            url="",
+                            origem=origem,
+                            casa=casa,
+                            sigla=None,
+                            numero=None,
+                            ano=None,
+                            resultado={"dados": []},
+                        )
+                    )
                 continue
 
-            # ==================================================
-            # MONTA A URL PARA NOVA CONSULTA
-            # ==================================================
+            # --------------------------------------------------
+            # PROPOSIÇÕES DO SENADO (SF):
+            # Parse via Regex apenas se casa == "SF" ou casa == "CN"
+            # --------------------------------------------------
+            if origem is None:
+                print(f"⚠️ Origem nula para URN {urn} no índice {idx}. Ignorando.")
+                continue
+
+            match = PATTERN.search(origem)
+            if not match:
+                print(f"⚠️ Não foi possível interpretar origem SF: {origem}")
+                sigla, numero, ano = None, None, None
+            else:
+                sigla, numero, ano = match.groups()
+
+            # --------------------------------------------------
+            # CHECA SE PRECISA REPETIR A REQUISIÇÃO (SF)
+            # --------------------------------------------------
+            if not precisa_coletar(registro_existente):
+                novos_registros.append(registro_existente)
+                total_sf_mantidos += 1
+                continue
+
+            if not sigla or not numero or not ano:
+                print(f"⚠️ Impossível consultar API sem sigla/número/ano: {origem}")
+                novos_registros.append(
+                    criar_registro(
+                        urn=urn,
+                        url="",
+                        origem=origem,
+                        casa=casa,
+                        sigla=sigla,
+                        numero=numero,
+                        ano=ano,
+                        resultado={"dados": []},
+                    )
+                )
+                continue
+
+            # --------------------------------------------------
+            # MONTA A URL PARA CONSULTA NO SENADO
+            # --------------------------------------------------
+            total_sf_coletar += 1
             url = f"{BASE_URL}?sigla={sigla}&numero={numero}&ano={ano}&v=1"
 
             urls.append(url)
@@ -240,7 +252,7 @@ async def main():
     # ==========================================================
 
     if urls:
-        print(f"\n🚀 Coletando {len(urls)} proposições do Senado...")
+        print(f"\n🚀 Coletando {len(urls)} proposições do Senado (SF)...")
 
         collector = AsyncCollector(
             max_concurrent=20,
@@ -250,13 +262,12 @@ async def main():
         raw_results = await collector.collect(urls)
 
         # ======================================================
-        # INSERE AS RESPOSTAS NAS POSIÇÕES CORRETAS (SEM ANINHAMENTO DUPLO)
+        # INSERE AS RESPOSTAS NAS POSIÇÕES CORRETAS
         # ======================================================
         for meta, resposta in zip(metadata, raw_results):
             urn = meta["urn"]
             index = meta["index"]
 
-            # Extrai apenas o payload limpo de dentro da resposta do AsyncCollector
             payload_limpo = normalizar_payload_senado(resposta)
 
             resultados[urn][index] = criar_registro(
@@ -270,7 +281,7 @@ async def main():
                 resultado=payload_limpo,
             )
     else:
-        print("\n✅ Nenhuma coleta necessária.")
+        print("\n✅ Nenhuma consulta à API do Senado foi necessária nesta execução.")
 
     # ==========================================================
     # SALVA O ARQUIVO
@@ -283,12 +294,12 @@ async def main():
 
     elapsed = time.time() - start_time
 
-    print("\n✅ Processo concluído!")
-    print(f"📊 Total de URNs: {len(resultados)}")
-    print(f"🏛️ Registros da CD ignorados: {total_cd_ignorados}")
-    print(f"💾 Resultados existentes mantidos: {total_mantidos}")
-    print(f"🌐 Novas consultas realizadas: {len(urls)}")
-    print(f"💾 Arquivo salvo em:\n{output_path}")
+    print("\n✅ Processo concluído com sucesso!")
+    print(f"📊 Total de URNs processadas: {len(resultados)}")
+    print(f"🏛️ Registros de outras casas (PR/CD/CN) salvos sem requisição: {total_outras_casas}")
+    print(f"💾 Registros de SF mantidos de execuções anteriores: {total_sf_mantidos}")
+    print(f"🌐 Novas consultas de SF executadas: {total_sf_coletar}")
+    print(f"💾 Arquivo final salvo em:\n{output_path}")
     print(f"⏱️ Tempo total: {elapsed:.2f}s")
 
 
