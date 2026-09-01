@@ -32,11 +32,7 @@ class SiglaTipo(Enum):
     PD = "PD"
     MPV = "MPV"
 
-class Norma(BaseModel):
-    nome: str
-    ano: int
-    ementa: Optional[str] = None
-    data_publicacao: Optional[datetime] = None
+
     
 class Emenda(BaseModel):
     id: int
@@ -51,31 +47,17 @@ class Relatorio(BaseModel):
     data_apresentacao: datetime
 
 class Proposicao(BaseModel):
-    id: int
-    uri: str
+    id_original: int
+    url_doc: str
+    url_metadados: str
     ano: int
     nome: str
-    nome_inicial: Optional[str] = None
-    palavras_chave: List[str]
     tipo: Tipo
     sigla_tipo: SiglaTipo
     autoria: List[Autor]
-    situacao_atual: Optional[str] = None
-    em_tramitacao: bool
     data_apresentacao: datetime
     casa_atual: Casa
     casa_origem: Casa
     ementa: str
     emendas: Optional[List[Emenda]] = None
     relatorios: Optional[List[Relatorio]] = None
-
-
-class Materia(BaseModel):
-    id: int
-    casa_iniciadora: Casa
-    tipo: Tipo
-    sigla_tipo: SiglaTipo
-    proposicao_sf: Optional[Proposicao] = None
-    proposicao_cd: Optional[Proposicao] = None
-    transformada_em_norma: bool
-    norma_gerada: Optional[Norma]
