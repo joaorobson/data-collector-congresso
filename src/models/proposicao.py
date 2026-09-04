@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import List, Optional, Literal, Annotated
 from enum import Enum
 from datetime import datetime
 
@@ -8,32 +8,77 @@ class Casa(Enum):
     SENADO = "Senado Federal"
     CONGRESSO = "Congresso Nacional"
 
-class Autor(BaseModel):
-    nome: str
-    tipo: str
-    uf: Optional[str] = None
-    sexo: Optional[str] = None
-
-class Tipo(Enum):
+class TipoProposicao(Enum):
     PEC = "Proposta de Emenda à Constituição"
     PL = "Projeto de Lei"
     PLP = "Projeto de Lei Complementar"
     PDG = "Proposta de Delegação Legislativa"
     PR = "Projeto de Resolução"
-    PD = "Projeto de Decreto Legislativo"
+    PDL = "Projeto de Decreto Legislativo"
     MPV = "Medida Provisória"
+    EMENDA = "Emenda"
+    DENUNCIA = "Denúncia"
 
-class SiglaTipo(Enum):
-    PEC = "PEC"
-    PL = "PL"
-    PLP = "PLP"
-    PDG = "PDG"
-    PR = "PR"
-    PD = "PD"
-    MPV = "MPV"
+class TipoAutor(str, Enum):
+    CIDADAO = "Cidadão"
+    PARLAMENTAR = "Parlamentar"
+    ORGAO = "Órgão"
+    ENTIDADE = "Entidade"
 
 
-    
+class CargoParlamentar(str, Enum):
+    DEPUTADO = "Deputado"
+    SENADOR = "Senador"
+
+class TipoOrgao(str, Enum):
+    ORGAO = "Órgão"
+    COMISSAO = "Comissão"
+    SENADO = "Senado Federal"
+    CAMARA = "Câmara dos Deputados"
+    MESA = "Mesa"
+    CONSELHO = "Conselho"
+
+
+class TipoEntidade(str, Enum):
+    DPU = "DPU"
+    MPU = "MPU"
+    SOCIEDADE_CIVIL = "Sociedade Civil"
+    PODER_EXECUTIVO = "Órgão do Poder Executivo"
+    PODER_JUDICIARIO = "Órgão do Poder Judiciário"
+    PODER_LEGISLATIVO = "Órgão do Poder Legislativo"
+    ORGAO_SENADO = "Órgão do Senado Federal"
+
+
+class Parlamentar(BaseModel):
+    tipo: Literal[TipoAutor.PARLAMENTAR]
+    nome: str
+    cargo: CargoParlamentar
+    uf: str | None = None
+    partido: str | None = None
+
+
+class Orgao(BaseModel):
+    tipo: Literal[TipoAutor.ORGAO]
+    nome: str
+    subtipo: TipoOrgao
+
+
+class Cidadao(BaseModel):
+    tipo: Literal[TipoAutor.CIDADAO]
+    nome: str
+
+
+class Entidade(BaseModel):
+    tipo: Literal[TipoAutor.ENTIDADE]
+    nome: str
+    subtipo: TipoEntidade
+
+
+Autor = Annotated[
+    Parlamentar | Orgao | Cidadao | Entidade,
+    Field(discriminator="tipo"),
+]
+
 class Emenda(BaseModel):
     id: int
     numero: int
@@ -48,12 +93,11 @@ class Relatorio(BaseModel):
 
 class Proposicao(BaseModel):
     id_original: int
-    url_doc: str
+    url_doc: Optional[str]
     url_metadados: str
     ano: int
     nome: str
-    tipo: Tipo
-    sigla_tipo: SiglaTipo
+    tipo: TipoProposicao
     autoria: List[Autor]
     data_apresentacao: datetime
     casa_atual: Casa

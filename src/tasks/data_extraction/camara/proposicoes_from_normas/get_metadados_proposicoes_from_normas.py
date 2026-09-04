@@ -4,10 +4,11 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
-
 from src.shared.async_collector import AsyncCollector
+from tqdm.asyncio import tqdm
 
 INPUT_FILE = "data/normas/metadados/proposicoes_origem_normalizadas.json"
 OUTPUT_FILE = "data/camara/metadados/proposicoes.json"
@@ -20,11 +21,8 @@ OLD_BASE_URL = (
 PATTERN = re.compile(r"([A-Z]+)\s+(\d+A?)/(\d{4})")
 
 
-def precisa_coletar(registro_existente) -> bool:
-    """
-    Verifica se um registro salvo precisa ser coletado novamente.
-    Retorna True se não existir, se status != 200, se houver erro ou se 'dados' vier vazio.
-    """
+def precisa_coletar(registro_existente: Optional[Dict[str, Any]]) -> bool:
+    """Verifica se um registro já possui os dados detalhados da proposição."""
     if not registro_existente:
         return True
 
@@ -39,14 +37,30 @@ def precisa_coletar(registro_existente) -> bool:
         return True
 
     dados = res.get("dados")
-    if not dados:  # Avalia True para None, [], etc.
+    if not dados or not isinstance(dados, list) or len(dados) == 0:
         return True
 
-    return False
+    primeiro_item = dados[0]
+    # Possui dados completos se contiver statusProposicao ou urlInteiroTeor
+    if isinstance(primeiro_item, dict) and (
+        "statusProposicao" in primeiro_item or "urlInteiroTeor" in primeiro_item
+    ):
+        return False
+
+    return True
 
 
-def criar_registro(urn, url, origem, casa, sigla, numero, ano, resultado):
-    """Cria um registro no formato padrão da Câmara."""
+def criar_registro(
+    urn: str,
+    url: str,
+    origem: Optional[str],
+    casa: Optional[str],
+    sigla: Optional[str],
+    numero: Optional[str],
+    ano: Optional[str],
+    resultado: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Cria um registro padronizado no formato da base de dados."""
     return {
         "urn": urn,
         "url": url,
@@ -59,92 +73,27 @@ def criar_registro(urn, url, origem, casa, sigla, numero, ano, resultado):
     }
 
 
-def resposta_sem_dados(resposta_collector) -> bool:
-    """Verifica se o retorno do AsyncCollector veio sem dados válidos."""
-    if not resposta_collector or not isinstance(resposta_collector, dict):
-        return True
-
-    if resposta_collector.get("status") != 200 or resposta_collector.get("erro"):
-        return True
-
-    body = resposta_collector.get("resultado")
-    if not body or not isinstance(body, dict):
-        return True
-
-    dados = body.get("dados")
-    if not dados:
-        return True
-
-    if isinstance(dados, list) and len(dados) == 0:
-        return True
-
-    return False
-
-
-async def buscar_id_api_antiga(session, sigla, numero, ano):
-    """Consulta a API SOAP/XML antiga para obter o idProposicao numérico."""
+async def buscar_id_api_antiga(
+    session: aiohttp.ClientSession, sigla: str, numero: str, ano: str
+) -> Optional[str]:
+    """Fallback: consulta a API SOAP/XML legada para recuperar o idProposicao numérico."""
     url = f"{OLD_BASE_URL}?tipo={sigla}&numero={numero}&ano={ano}"
-
     try:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+        async with session.get(
+            url, timeout=aiohttp.ClientTimeout(total=15)
+        ) as resp:
             if resp.status != 200:
                 return None
 
             xml = await resp.text()
             root = ET.fromstring(xml)
             id_prop = root.findtext("idProposicao")
-
             if id_prop:
                 return id_prop.strip()
-
     except Exception as e:
-        print(f"⚠️ Erro ao consultar API antiga ({sigla} {numero}/{ano}): {e}")
+        print(f"⚠️ Erro na API legada ({sigla} {numero}/{ano}): {e}")
 
     return None
-
-
-async def processar_fallback(session, collector, meta, res):
-    """
-    Trata o fallback de forma assíncrona individual.
-    Se a API v2 não retornou dados, tenta obter o ID via API antiga e faz nova chamada por ID na v2.
-    """
-    if not resposta_sem_dados(res):
-        return meta, res
-
-    sigla = meta["sigla"]
-    numero = meta["numero"]
-    ano = meta["ano"]
-
-    if not sigla or not numero or not ano:
-        return meta, res
-
-    print(f"↪ Tentando API antiga em paralelo: {sigla} {numero}/{ano}")
-    id_prop = await buscar_id_api_antiga(session, sigla, numero, ano)
-
-    if not id_prop:
-        return meta, res
-
-    nova_url = f"{BASE_URL}/{id_prop}"
-    print(f"   Encontrado ID {id_prop} para {sigla} {numero}/{ano}. Consultando v2 por ID...")
-
-    novo_resultado = await collector.collect([nova_url])
-
-    if novo_resultado:
-        res_fallback = novo_resultado[0]
-
-        # Normaliza resposta por ID (dict) para formato de lista
-        if res_fallback.get("status") == 200 and isinstance(
-            res_fallback.get("resultado"), dict
-        ):
-            dados_id = res_fallback["resultado"].get("dados")
-            if isinstance(dados_id, dict):
-                res_fallback["resultado"]["dados"] = [dados_id]
-
-        meta_atualizado = meta.copy()
-        meta_atualizado["url"] = nova_url
-        return meta_atualizado, res_fallback
-
-    return meta, res
 
 
 async def main():
@@ -154,35 +103,28 @@ async def main():
     output_path = Path(OUTPUT_FILE)
 
     if not input_path.exists():
-        raise FileNotFoundError(f"❌ Arquivo de entrada não encontrado:\n{input_path}")
+        raise FileNotFoundError(f"❌ Arquivo de entrada não encontrado: {input_path}")
 
-    with input_path.open("r", encoding="utf-8") as file:
-        proposicoes_origem = json.load(file)
+    with input_path.open("r", encoding="utf-8") as f:
+        proposicoes_origem = json.load(f)
 
     resultados = {}
-
     if output_path.exists():
-        print(f"📂 Carregando resultados existentes:\n{output_path}")
-        with output_path.open("r", encoding="utf-8") as file:
+        print(f"📂 Carregando base existente em: {output_path}")
+        with output_path.open("r", encoding="utf-8") as f:
             try:
-                resultados = json.load(file)
+                resultados = json.load(f)
             except json.JSONDecodeError:
-                print("⚠️ O arquivo existente possui JSON inválido. Reiniciando base.")
+                print("⚠️ JSON corrompido ou inválido. Reiniciando base.")
                 resultados = {}
-    else:
-        print("📂 Nenhum arquivo anterior encontrado. Iniciando nova coleta.")
 
-    urls = []
-    metadata = []
-
+    metadata_para_coleta: List[Dict[str, Any]] = []
     total_outras_casas = 0
     total_cd_mantidos = 0
-    total_cd_coletar = 0
 
     # ==========================================================
-    # PREPARA AS CONSULTAS
+    # PREPARAÇÃO DAS FILAS E VALIDAÇÃO DE CACHE
     # ==========================================================
-
     for urn, prop in proposicoes_origem.items():
         origens = prop.get("origem_final") or []
         casas = prop.get("casas") or []
@@ -195,54 +137,52 @@ async def main():
                 registros_atuais[idx] if idx < len(registros_atuais) else None
             )
 
-            # --------------------------------------------------
-            # OUTRAS CASAS (PR, SF, CN, etc.):
-            # Não rodam a Regex nem consultam a API.
-            # --------------------------------------------------
+            # Demais casas legislativas e órgãos (SF, PR, CN)
             if casa != "CD":
                 total_outras_casas += 1
-                if registro_existente:
-                    novos_registros.append(registro_existente)
-                else:
-                    novos_registros.append(
-                        criar_registro(
-                            urn=urn,
-                            url="",
-                            origem=origem,
-                            casa=casa,
-                            sigla=None,
-                            numero=None,
-                            ano=None,
-                            resultado={"dados": []},
-                        )
+                novos_registros.append(
+                    criar_registro(
+                        urn=urn,
+                        url="",
+                        origem=origem,
+                        casa=casa,
+                        sigla=None,
+                        numero=None,
+                        ano=None,
+                        resultado={"dados": []},
                     )
+                )
                 continue
 
-            # --------------------------------------------------
-            # PROPOSIÇÕES DA CÂMARA (CD):
-            # Parse via Regex apenas se casa == "CD"
-            # --------------------------------------------------
-            if origem is None:
-                print(f"⚠️ Origem nula para URN {urn} no índice {idx}. Ignorando.")
+            # Câmara dos Deputados (CD)
+            if not origem:
+                novos_registros.append(
+                    criar_registro(
+                        urn=urn,
+                        url="",
+                        origem=origem,
+                        casa=casa,
+                        sigla=None,
+                        numero=None,
+                        ano=None,
+                        resultado={"dados": []},
+                    )
+                )
                 continue
 
             match = PATTERN.search(origem)
             if not match:
-                print(f"⚠️ Não foi possível interpretar origem CD: {origem}")
                 sigla, numero, ano = None, None, None
             else:
                 sigla, numero, ano = match.groups()
 
-            # --------------------------------------------------
-            # CHECA SE PRECISA REETETIR A REQUISIÇÃO (CD)
-            # --------------------------------------------------
+            # Cache hit: registro já possui payload detalhado
             if not precisa_coletar(registro_existente):
                 novos_registros.append(registro_existente)
                 total_cd_mantidos += 1
                 continue
 
             if not sigla or not numero or not ano:
-                print(f"⚠️ Impossível consultar API sem sigla/número/ano: {origem}")
                 novos_registros.append(
                     criar_registro(
                         urn=urn,
@@ -257,37 +197,30 @@ async def main():
                 )
                 continue
 
-            # --------------------------------------------------
-            # MONTA URL DE CONSULTA NA CÂMARA
-            # --------------------------------------------------
-            total_cd_coletar += 1
-            url = (
+            url_busca = (
                 f"{BASE_URL}?"
-                f"siglaTipo={sigla}&"
-                f"numero={numero}&"
-                f"ano={ano}&"
-                f"ordem=ASC&"
-                f"ordenarPor=id"
+                f"siglaTipo={sigla}&numero={numero}&ano={ano}&"
+                f"ordem=ASC&ordenarPor=id"
             )
 
-            urls.append(url)
-            metadata.append(
+            metadata_para_coleta.append(
                 {
                     "urn": urn,
                     "index": idx,
-                    "url": url,
                     "origem": origem,
                     "casa": casa,
                     "sigla": sigla,
                     "numero": numero,
                     "ano": ano,
+                    "url_busca": url_busca,
                 }
             )
 
+            # Placeholder atualizado até a resposta da requisição
             novos_registros.append(
                 criar_registro(
                     urn=urn,
-                    url=url,
+                    url="",
                     origem=origem,
                     casa=casa,
                     sigla=sigla,
@@ -300,66 +233,112 @@ async def main():
         resultados[urn] = novos_registros
 
     # ==========================================================
-    # EXECUÇÃO PARALELA DAS CONSULTAS E FALLBACKS
+    # EXECUÇÃO DO PIPELINE EM 2 ETAPAS EM LOTE
     # ==========================================================
+    if metadata_para_coleta:
+        total_props = len(metadata_para_coleta)
+        collector = AsyncCollector(max_concurrent=15, retries=3)
 
-    if urls:
-        print(f"\n🚀 Coletando {len(urls)} proposições da Câmara (CD)...")
+        # ------------------------------------------------------
+        # ETAPA 1.1: Consulta em lote à API v2 para obter IDs
+        # ------------------------------------------------------
+        print(f"\n🚀 [Etapa 1.1] Buscando IDs de {total_props} proposições na API v2...")
+        urls_busca = [m["url_busca"] for m in metadata_para_coleta]
+        respostas_busca = await collector.collect(urls_busca)
 
-        collector = AsyncCollector(
-            max_concurrent=15,
-            retries=3,
-        )
+        mapa_ids: Dict[int, str] = {}
+        pendentes_legado: List[Tuple[int, Dict[str, Any]]] = []
 
-        raw_results = await collector.collect(urls)
+        for i, (meta, resp) in enumerate(zip(metadata_para_coleta, respostas_busca)):
+            id_encontrado = None
+            if resp and isinstance(resp, dict):
+                corpo = resp.get("resultado", {})
+                dados = corpo.get("dados") if isinstance(corpo, dict) else []
+                if isinstance(dados, list) and len(dados) > 0:
+                    id_encontrado = str(dados[0].get("id"))
 
-        print("🔎 Verificando e aplicando fallback assíncrono paralelo (API antiga)...")
+            if id_encontrado:
+                mapa_ids[i] = id_encontrado
+            else:
+                pendentes_legado.append((i, meta))
 
-        async with aiohttp.ClientSession() as session:
-            tasks = [
-                processar_fallback(session, collector, meta, res)
-                for meta, res in zip(metadata, raw_results)
-            ]
-            resultados_processados = await asyncio.gather(*tasks)
+        # ------------------------------------------------------
+        # ETAPA 1.2: Fallback na API Legada para os IDs não encontrados
+        # ------------------------------------------------------
+        if pendentes_legado:
+            print(f"\n🔎 [Etapa 1.2] Resolvendo {len(pendentes_legado)} proposições pendentes na API antiga...")
+            async with aiohttp.ClientSession() as session:
+                tasks_legado = [
+                    buscar_id_api_antiga(
+                        session, meta["sigla"], meta["numero"], meta["ano"]
+                    )
+                    for _, meta in pendentes_legado
+                ]
+                ids_legados = await tqdm.gather(
+                    *tasks_legado, desc="API Legada (SOAP)"
+                )
 
-        # Atribuição dos resultados finais respeitando o índice original de cada URN
-        for meta_atualizado, res_final in resultados_processados:
-            urn = meta_atualizado["urn"]
-            index = meta_atualizado["index"]
+                for (i, meta), id_legado in zip(pendentes_legado, ids_legados):
+                    if id_legado:
+                        mapa_ids[i] = str(id_legado)
+                    else:
+                        print(f"❌ ID não localizado: {meta['origem']}")
 
-            corpo = res_final.get("resultado") if isinstance(res_final, dict) else {}
-            payload_limpo = corpo if isinstance(corpo, dict) else {"dados": []}
+        # ------------------------------------------------------
+        # ETAPA 2: Consulta detalhada em lote por ID (/proposicoes/{id})
+        # ------------------------------------------------------
+        itens_para_detalhar = [
+            (metadata_para_coleta[i], f"{BASE_URL}/{id_prop}")
+            for i, id_prop in mapa_ids.items()
+        ]
 
-            resultados[urn][index] = criar_registro(
-                urn=meta_atualizado["urn"],
-                url=meta_atualizado["url"],
-                origem=meta_atualizado["origem"],
-                casa=meta_atualizado["casa"],
-                sigla=meta_atualizado["sigla"],
-                numero=meta_atualizado["numero"],
-                ano=meta_atualizado["ano"],
-                resultado=payload_limpo,
-            )
+        if itens_para_detalhar:
+            print(f"\n📥 [Etapa 2] Coletando detalhes completos de {len(itens_para_detalhar)} proposições...")
+            urls_detalhe = [url for _, url in itens_para_detalhar]
+            res_detalhes = await collector.collect(urls_detalhe)
+
+            for (meta, url_detalhe), res in zip(itens_para_detalhar, res_detalhes):
+                urn = meta["urn"]
+                index = meta["index"]
+
+                corpo = res.get("resultado") if isinstance(res, dict) else {}
+                dados_detalhe = corpo.get("dados") if isinstance(corpo, dict) else None
+
+                # Uniformiza objeto de detalhes sob lista [ {...} ]
+                if isinstance(dados_detalhe, dict):
+                    payload_dados = [dados_detalhe]
+                elif isinstance(dados_detalhe, list):
+                    payload_dados = dados_detalhe
+                else:
+                    payload_dados = []
+
+                resultados[urn][index] = criar_registro(
+                    urn=urn,
+                    url=url_detalhe,
+                    origem=meta["origem"],
+                    casa=meta["casa"],
+                    sigla=meta["sigla"],
+                    numero=meta["numero"],
+                    ano=meta["ano"],
+                    resultado={"dados": payload_dados},
+                )
     else:
-        print("\n✅ Nenhuma consulta à API da Câmara foi necessária nesta execução.")
+        print("\n✅ Todas as proposições da Câmara já possuem dados detalhados atualizados.")
 
     # ==========================================================
-    # SALVA O ARQUIVO JSON
+    # PERSISTÊNCIA DOS DADOS
     # ==========================================================
-
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with output_path.open("w", encoding="utf-8") as file:
-        json.dump(resultados, file, ensure_ascii=False, indent=2)
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(resultados, f, ensure_ascii=False, indent=2)
 
     elapsed = time.time() - start_time
-
-    print("\n✅ Processo concluído com sucesso!")
-    print(f"📊 Total de URNs processadas: {len(resultados)}")
-    print(f"🏛️ Registros de outras casas (PR/SF/CN) salvos sem requisição: {total_outras_casas}")
-    print(f"💾 Registros de CD mantidos de execuções anteriores: {total_cd_mantidos}")
-    print(f"🌐 Novas consultas de CD executadas: {total_cd_coletar}")
-    print(f"💾 Arquivo final salvo em:\n{output_path}")
+    print("\n✅ Coleta concluída com sucesso!")
+    print(f"📊 URNs processadas: {len(resultados)}")
+    print(f"🏛️ Registros de outras casas (SF/PR/CN): {total_outras_casas}")
+    print(f"💾 Registros mantidos em cache: {total_cd_mantidos}")
+    print(f"🌐 Proposições consultadas: {len(metadata_para_coleta)}")
+    print(f"📁 Arquivo final: {output_path}")
     print(f"⏱️ Tempo total: {elapsed:.2f}s")
 
 

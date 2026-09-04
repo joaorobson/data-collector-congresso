@@ -406,6 +406,7 @@ def normalizar_resolucao_cd(titulo):
 prcs_map = {item["nome_norma"]: item["nomeProposicao"] for item in prcs_transf_norma}
 
 origens = {}
+origens_nao_encontradas = {}
 x = 0
 for norma in tqdm(normas):
     origem_cd_norm = None
@@ -414,7 +415,8 @@ for norma in tqdm(normas):
         origem_cd = prcs_map.get(normalizar_resolucao_cd(norma["titulo"]))
         if not origem_cd:
             x += 1
-            print("Não encontrado na PRC:", norma["titulo"])
+            origens_nao_encontradas[norma["urn"]] = norma["titulo"]
+            print("Não encontrado na PRC:", norma["titulo"], norma["urn"])
             continue
         else:
             origem_cd_norm = [origem_cd]
@@ -437,6 +439,7 @@ for norma in tqdm(normas):
 
     if not origem_lexml and not origem_normas and not origem_cd_norm and not origem_sf:
         print("URN sem origens:", urn)
+        origens_nao_encontradas[urn] = norma["titulo"]
         x += 1
         continue
     
@@ -472,6 +475,10 @@ with open(
     "data/normas/metadados/proposicoes_origem_normalizadas.json", "w", encoding="utf-8"
 ) as f:
     json.dump(origens, f, indent=4, ensure_ascii=False)
+
+
+with open("data/normas/metadados/proposicoes_origem_nao_encontradas.json", "w", encoding="utf-8") as f:
+    json.dump(origens_nao_encontradas, f, indent=4, ensure_ascii=False)
 
 print("Total consolidado:", len(origens))
 print("Não encontrado:", x)
