@@ -80,10 +80,11 @@ Autor = Annotated[
 ]
 
 class Emenda(BaseModel):
-    id: int
     numero: int
-    uri: str
+    id_original: int
     data_apresentacao: datetime
+    url_doc: Optional[str] = None
+    url_metadados: Optional[str] = None
 
 class Relatorio(BaseModel):
     id: int
@@ -92,16 +93,16 @@ class Relatorio(BaseModel):
     data_apresentacao: datetime
 
 class Proposicao(BaseModel):
-    id_original: int
-    url_doc: Optional[str]
-    url_metadados: str
-    ano: int
-    nome: str
-    tipo: TipoProposicao
-    autoria: List[Autor]
-    data_apresentacao: datetime
+    id_original: Optional[int] = None
+    ano: Optional[int] = None
+    nome: Optional[str] = None
+    tipo: Optional[TipoProposicao] = None
     casa_atual: Casa
     casa_origem: Casa
-    ementa: str
+    url_doc: Optional[str] = None
+    url_metadados: Optional[str] = None
+    autoria: Optional[List[Autor]] = None
+    data_apresentacao: Optional[datetime] = None
+    ementa: Optional[str] = None
     emendas: Optional[List[Emenda]] = None
     relatorios: Optional[List[Relatorio]] = None

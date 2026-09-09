@@ -1,132 +1,193 @@
 import asyncio
 import json
-import os
+import time
+from pathlib import Path
+from typing import Any, Dict, Optional
 
+from tqdm import tqdm
 from src.shared.async_collector import AsyncCollector
+
+INPUT_FILE = "data/senado/metadados/proposicoes.json"
+OUTPUT_FILE = "data/senado/metadados/emendas.json"
 
 URL_EMENDAS = (
     "https://legis.senado.leg.br/dadosabertos/processo/emenda"
     "?idProcesso={}&v=1"
 )
 
+# Configurações de estabilidade para o Senado
+MAX_CONCURRENT = 4       # Concorrência reduzida para evitar erro de socket/firewall
+BATCH_SIZE = 150         # Salva o arquivo em disco a cada lote
+
+
+def salvar_progresso(caminho: Path, dados: Dict[str, Any]):
+    """Salva estado atual em disco de forma segura."""
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    with caminho.open("w", encoding="utf-8") as f:
+        json.dump(dados, f, ensure_ascii=False, indent=2)
+
+
+def precisa_coletar(registro_existente: Optional[Dict[str, Any]]) -> bool:
+    """Verifica se um registro já possui as emendas coletadas com sucesso."""
+    if not registro_existente:
+        return True
+
+    # Se houve falha na coleta (erro de request) ou status não é 200
+    if registro_existente.get("status") != 200:
+        return True
+    
+    if registro_existente.get("erro"):
+        return True
+
+    # Se ainda não existe a chave de resultado ou não for uma lista (mesmo que vazia), precisa coletar
+    if "resultado" not in registro_existente or not isinstance(registro_existente["resultado"], list):
+        return True
+
+    return False
+
 
 async def main():
+    start_time = time.time()
 
-    input_path = "data/senado/metadados/proposicoes.json"
-    output_path = "data/senado/metadados/emendas.json"
+    input_path = Path(INPUT_FILE)
+    output_path = Path(OUTPUT_FILE)
 
-    if not os.path.exists(input_path):
+    if not input_path.exists():
         print(f"❌ Arquivo não encontrado: {input_path}")
         return
 
-    with open(input_path, "r", encoding="utf-8") as f:
+    with input_path.open("r", encoding="utf-8") as f:
         proposicoes = json.load(f)
 
     # -------------------------------------------------------
     # Carrega resultado anterior (execução incremental)
     # -------------------------------------------------------
+    resultados = {}
+    if output_path.exists():
+        print(f"📂 Carregando base existente em: {output_path}")
+        with output_path.open("r", encoding="utf-8") as f:
+            try:
+                resultados = json.load(f)
+            except json.JSONDecodeError:
+                print("⚠️ JSON corrompido ou inválido. Reiniciando base.")
+                resultados = {}
 
-    if os.path.exists(output_path):
-        with open(output_path, "r", encoding="utf-8") as f:
-            resultados = json.load(f)
-    else:
-        resultados = {}
-
-    processos = []
+    processos_para_coleta = []
+    mantidos_em_cache = 0
+    ids_vistos = set()
 
     # -------------------------------------------------------
     # Monta lista de processos pendentes
     # -------------------------------------------------------
-
     for urn, props in proposicoes.items():
-
         for prop in props:
+            # Compatibilidade com o formato salvo no script de proposicoes
+            resultado_prop = prop.get("resultado") or {}
+            if not isinstance(resultado_prop, dict):
+                continue
+                
+            dados = resultado_prop.get("dados") or []
+            if isinstance(dados, dict):
+                dados = [dados]
 
-            resultado = prop.get("resultado") or []
+            for item in dados:
+                if not isinstance(item, dict):
+                    continue
 
-            if isinstance(resultado, dict):
-                resultado = [resultado]
-
-            for item in resultado:
-
-                id_processo = str(item.get("id"))
-
+                # Extração segura do ID do processo (adaptando ao payload do Senado)
+                id_processo = (
+                    item.get("id") 
+                    or item.get("codigoProcesso") 
+                    or item.get("codigo") 
+                    or item.get("codigoMateria")
+                )
+                
                 if not id_processo:
                     continue
-
+                
+                id_processo = str(id_processo).strip()
                 existente = resultados.get(id_processo)
 
-                # Já possui resultado -> não consulta novamente
-                if existente and existente.get("resultado"):
+                # Se já possui o resultado com sucesso -> não consulta novamente
+                if not precisa_coletar(existente):
+                    mantidos_em_cache += 1
                     continue
 
-                processos.append(
-                    {
+                # Evita enfileirar o mesmo ID de processo múltiplas vezes se houver repetição na base
+                if id_processo not in ids_vistos:
+                    ids_vistos.add(id_processo)
+                    processos_para_coleta.append({
                         "id": id_processo,
                         "urn": urn,
-                        "origem": prop["origem"],
+                        "origem": prop.get("origem"),
                         "url": URL_EMENDAS.format(id_processo),
-                    }
-                )
+                    })
 
-    print(f"📋 Processos pendentes: {len(processos)}")
+    total_pendente = len(processos_para_coleta)
 
-    if not processos:
-        print("✅ Tudo já processado.")
+    if total_pendente == 0:
+        print(f"✅ Tudo já processado. (Em cache: {mantidos_em_cache})")
         return
 
+    # -------------------------------------------------------
+    # EXECUÇÃO EM LOTES (CHUNKS) COM SALVAMENTO PERIÓDICO E TQDM
+    # -------------------------------------------------------
+    print(f"\n🚀 Total a coletar: {total_pendente} emendas (Lotes de {BATCH_SIZE}, Concorrência={MAX_CONCURRENT})...")
+    
     collector = AsyncCollector(
-        max_concurrent=10,
-        retries=5,
+        max_concurrent=MAX_CONCURRENT,
+        retries=3,
     )
 
-    respostas = await collector.collect(
-        [p["url"] for p in processos]
-    )
+    # Barra de progresso com o tqdm
+    with tqdm(total=total_pendente, desc="Coletando emendas", unit="req") as pbar:
+        for i in range(0, total_pendente, BATCH_SIZE):
+            lote = processos_para_coleta[i : i + BATCH_SIZE]
+            lote_num = (i // BATCH_SIZE) + 1
 
-    # -------------------------------------------------------
-    # Processa respostas
-    # -------------------------------------------------------
+            urls_busca = [p["url"] for p in lote]
+            respostas = await collector.collect(urls_busca)
 
-    for processo, resposta in zip(processos, respostas):
+            # Processa respostas do lote
+            for processo, resposta in zip(lote, respostas):
+                emendas = []
+                status = resposta.get("status")
+                erro = resposta.get("erro")
 
-        emendas = []
+                if status == 200:
+                    body = resposta.get("resultado")
+                    if isinstance(body, list):
+                        emendas = body
+                    elif isinstance(body, dict):
+                        emendas = [body]
 
-        if resposta["status"] == 200:
+                # Atualiza o dicionário principal usando o id da proposição como chave
+                resultados[processo["id"]] = {
+                    "urn": processo["urn"],
+                    "origem": processo["origem"],
+                    "status": status,
+                    "erro": erro,
+                    "resultado": emendas,
+                }
 
-            body = resposta["resultado"]
+            # Checkpoint: Salva após cada lote finalizado
+            salvar_progresso(output_path, resultados)
+            
+            # Usamos pbar.write() em vez de print() para não quebrar o layout da barra de progresso
+            pbar.write(f"💾 Lote {lote_num} finalizado. Progresso salvo em disco.")
 
-            if isinstance(body, list):
-                emendas = body
+            # Pausa para aliviar o socket e firewall do Senado
+            await asyncio.sleep(1.5)
+            
+            # Atualiza a barra de progresso
+            pbar.update(len(lote))
 
-            elif isinstance(body, dict):
-                emendas = [body]
-
-        resultados[processo["id"]] = {
-            "urn": processo["urn"],
-            "origem": processo["origem"],
-            "status": resposta["status"],
-            "erro": resposta["erro"],
-            "resultado": emendas,
-        }
-
-    # -------------------------------------------------------
-    # Salva resultado
-    # -------------------------------------------------------
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(
-            resultados,
-            f,
-            ensure_ascii=False,
-            indent=2,
-        )
-
-    print("\n✅ Coleta concluída!")
-    print(f"📦 Processos processados: {len(resultados)}")
-    print(f"💾 Arquivo salvo em: {output_path}")
+    elapsed = time.time() - start_time
+    print("\n🏁 Coleta finalizada com sucesso!")
+    print(f"📊 Processos mapeados armazenados: {len(resultados)}")
+    print(f"💾 Registros mantidos em cache: {mantidos_em_cache}")
+    print(f"🌐 Emendas consultadas nesta execução: {total_pendente}")
+    print(f"⏱️ Tempo total: {elapsed:.2f}s")
 
 
 if __name__ == "__main__":
