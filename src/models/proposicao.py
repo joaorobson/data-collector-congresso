@@ -87,9 +87,9 @@ class Emenda(BaseModel):
     url_metadados: Optional[str] = None
 
 class Relatorio(BaseModel):
-    id: int
-    numero: int
-    uri: str
+    id_original: int
+    url_doc: Optional[str] = None
+    url_metadados: Optional[str] = None
     data_apresentacao: datetime
 
 class Proposicao(BaseModel):
