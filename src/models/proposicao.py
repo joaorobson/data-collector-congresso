@@ -80,6 +80,8 @@ Autor = Annotated[
 ]
 
 class Emenda(BaseModel):
+    id: int
+    id_proposicao: int
     numero: int
     id_original: int
     data_apresentacao: datetime
@@ -87,12 +89,16 @@ class Emenda(BaseModel):
     url_metadados: Optional[str] = None
 
 class Relatorio(BaseModel):
+    id: int
+    id_proposicao: int
     id_original: int
     url_doc: Optional[str] = None
     url_metadados: Optional[str] = None
     data_apresentacao: datetime
 
 class Proposicao(BaseModel):
+    id: int
+    urn_norma: str
     id_original: Optional[int] = None
     ano: Optional[int] = None
     nome: Optional[str] = None

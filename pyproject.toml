@@ -6,10 +6,16 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.13.5",
+    "beautifulsoup4>=4.14.3",
     "ijson>=3.5.0",
     "jupyter>=1.1.1",
+    "lxml>=6.1.1",
+    "matplotlib>=3.11.2",
+    "oracledb>=4.0.2",
     "pandas>=3.0.2",
+    "pyarrow>=25.0.1",
     "pydantic>=2.13.3",
     "rapidfuzz>=3.14.5",
+    "sqlalchemy>=2.0.51",
     "tqdm>=4.67.3",
 ]

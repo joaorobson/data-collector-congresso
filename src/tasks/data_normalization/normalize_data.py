@@ -4,6 +4,9 @@ from src.models.proposicao import *
 from tqdm import tqdm
 import re
 from datetime import datetime
+import pandas as pd
+
+
 
 normas_path = "data/normas/metadados/normas.json"
 proposicoes_origem = "data/normas/metadados/proposicoes_origem_normalizadas.json"
@@ -141,7 +144,6 @@ def _normalize_autor_cd(autor: dict) -> Autor:
     )
 
 def _normalize_autor_sf(autor: dict) -> Autor | None:
-    print(autor)
     tipo = autor.get("siglaTipo", "").strip().upper()
     nome = autor.get("autor", "").strip()
 
@@ -251,60 +253,76 @@ def get_casa(casa):
     elif casa == "CN":
         return Casa.CONGRESSO
 
-def normalize_emendas_cd(emendas: list):
+def normalize_emendas_cd(emendas: list, id_emenda: int, id_proposicao: int):
     emendas_norm = []
     for emenda in emendas:
         emendas_norm.append(Emenda(
+            id=id_emenda,
+            id_proposicao=id_proposicao,
             numero=int(emenda.get("numero")),
             id_original=int(emenda.get("id")),
             data_apresentacao=emenda.get("dataApresentacao"),
             url_doc=emenda.get("urlInteiroTeor"),
             url_metadados=emenda.get("uri")
         ))
+        id_emenda += 1
 
-    return emendas_norm
+    return emendas_norm, id_emenda
 
-def normalize_relatorios_cd(relatorios: list):
+def normalize_relatorios_cd(relatorios: list, id_relatorio: int, id_proposicao: int):
     relatorios_norm = []
     for relatorio in relatorios:
         relatorios_norm.append(
             Relatorio(
+                id=id_relatorio,
+                id_proposicao=id_proposicao,
                 id_original=int(relatorio.get("id")),
                 data_apresentacao=relatorio.get("dataApresentacao"),
                 url_doc=relatorio.get("urlInteiroTeor"),
                 url_metadados=relatorio.get("uri")
             )
         )
+        id_relatorio += 1
 
-    return relatorios_norm
+    return relatorios_norm, id_relatorio
 
-def normalize_emendas_sf(emendas: list):
+def normalize_emendas_sf(emendas: list, id_emenda: int, id_proposicao: int):
     emendas_norm = []
     for emenda in emendas:
         emendas_norm.append(Emenda(
+            id=id_emenda,
+            id_proposicao=id_proposicao,
             numero=int(emenda.get("numero")),
             id_original=int(emenda.get("id")),
             data_apresentacao=emenda.get("dataApresentacao"),
             url_doc=emenda.get("urlDocumentoEmenda"),
             url_metadados=f"https://legis.senado.leg.br/dadosabertos/processo/emenda?idProcesso={emenda.get('idProcesso')}&v=1"
         ))
+        id_emenda += 1
 
-    return emendas_norm
+    return emendas_norm, id_emenda
 
-def normalize_relatorios_sf(relatorios: list):
+def normalize_relatorios_sf(relatorios: list, id_relatorio: int, id_proposicao: int):
     relatorios_norm = []
     for relatorio in relatorios:
         relatorios_norm.append(
             Relatorio(
+                id=id_relatorio,
+                id_proposicao=id_proposicao,
                 id_original=int(relatorio.get("id")),
                 data_apresentacao=relatorio.get("dataRecebimento"),
                 url_doc=relatorio.get("urlDocumento"),
                 url_metadados=f"https://legis.senado.leg.br/dadosabertos/processo/emenda?idProcesso={relatorio.get('id')}&v=1"
             )
         )
+        id_relatorio += 1
 
-    return relatorios_norm
+    return relatorios_norm, id_relatorio
 
+normas_norm = []
+id_proposicao = 1
+id_emenda = 1
+id_relatorio = 1
 for norma in tqdm(normas):
     urn = norma.get("urn")
     if urn in proposicoes_origem_nao_encontradas:
@@ -320,7 +338,7 @@ for norma in tqdm(normas):
         try:
             tipo_norma_enum = TipoNorma(tipo_norma)
         except ValueError:
-            print(f"Tipo de norma inválido para a norma {urn}: {tipo_norma}")
+            raise(f"Tipo de norma inválido para a norma {urn}: {tipo_norma}")
     else:
         print(f"Tipo de norma não especificado para a norma {urn}")
 
@@ -330,26 +348,33 @@ for norma in tqdm(normas):
     proposicoes_senado_urn = proposicoes_senado[urn]
     proposicoes_norm = []
 
-    print(urn)
+    # print(urn)
     for ix, casa in enumerate(proposicoes_origem_urn["casas"]):           
         if casa == "CD":
             if urn in MISSING_PROPS and ix == MISSING_PROPS[urn]["indice"] and MISSING_PROPS[urn]["casa"] == "CD":
                 print(f"Proposição faltando para a norma {urn} na posição {ix}. Pulando...")
                 origem = proposicoes_camara_urn[ix].get("origem")
                 ano = proposicoes_camara_urn[ix].get("ano")
-                proposicoes_norm.append(Proposicao(nome=origem,
+                proposicoes_norm.append(Proposicao(id=id_proposicao,
+                                                   urn_norma=urn,
+                                                    nome=origem,
                                                     tipo=TIPOS_PROPOSICAO.get(origem.split()[0]) if origem else None,
                                                     ano=int(ano) if ano else None,
                                                     casa_atual=Casa.CAMARA,
                                                     casa_origem=get_casa(proposicoes_origem_urn["casas"][ix-1]) if ix > 0 else get_casa("CD")))
+                id_proposicao += 1
                 continue
             prop_cd = proposicoes_camara_urn[ix]["resultado"]["dados"][0]
             emendas = emendas_camara.get(str(prop_cd.get("id")), {}).get("resultado", [])
+            emendas_norm, id_emenda = normalize_emendas_cd(emendas, id_emenda, id_proposicao)
             relatorios = relatorios_camara.get(str(prop_cd.get("id")), {}).get("resultado", [])
+            relatorios_norm, id_relatorio = normalize_relatorios_cd(relatorios, id_relatorio, id_proposicao)
 
             autoria_prop_cd = autoria_proposicoes_camara_urn[ix]["resultado"]["dados"]
             autoria_norm = normalize_autoria(autoria_prop_cd, casa)
-            proposicoes_norm.append(Proposicao(id_original=prop_cd.get("id"), 
+            proposicoes_norm.append(Proposicao(id=id_proposicao,
+                                               id_original=prop_cd.get("id"), 
+                                               urn_norma=urn,
                                                nome=f"{prop_cd.get('siglaTipo')} {prop_cd.get('numero')}/{prop_cd.get('ano')}",
                                                ano=prop_cd.get("ano"), 
                                                numero=prop_cd.get("numero"),
@@ -361,8 +386,9 @@ for norma in tqdm(normas):
                                                url_metadados=prop_cd.get("uri"),
                                                casa_atual=Casa.CAMARA,
                                                casa_origem=get_casa(proposicoes_origem_urn["casas"][ix-1]) if ix > 0 else get_casa("CD"),
-                                               emendas=normalize_emendas_cd(emendas),
-                                               relatorios=normalize_relatorios_cd(relatorios)))
+                                               emendas=emendas_norm,
+                                               relatorios=relatorios_norm))
+            id_proposicao += 1
             #print(proposicoes_norm)
         elif casa == "SF":
             if urn in MISSING_PROPS and ix == MISSING_PROPS[urn]["indice"] and MISSING_PROPS[urn]["casa"] == "SF":
@@ -370,19 +396,26 @@ for norma in tqdm(normas):
                 origem = proposicoes_senado_urn[ix].get("origem")
                 ano = proposicoes_senado_urn[ix].get("ano")
 
-                proposicoes_norm.append(Proposicao(nome=origem,
+                proposicoes_norm.append(Proposicao(id=id_proposicao,
+                                                   nome=origem,
+                                                   urn_norma=urn,
                                                    tipo=TIPOS_PROPOSICAO.get(origem.split()[0]) if origem else None,
                                                    ano=int(ano) if ano else None,
                                                    casa_atual=Casa.SENADO,
                                                    casa_origem=get_casa(proposicoes_origem_urn["casas"][ix-1]) if ix > 0 else get_casa("SF")))
+                id_proposicao += 1
                 continue
             prop_sf = proposicoes_senado_urn[ix]["resultado"]["dados"][0]
             emendas = emendas_senado.get(str(prop_sf.get("id")), {}).get("resultado", [])
+            emendas_norm, id_emenda = normalize_emendas_sf(emendas, id_emenda, id_proposicao)
             relatorios = relatorios_senado.get(str(prop_sf.get("id")), {}).get("resultado", [])
+            relatorios_norm, id_relatorio = normalize_relatorios_sf(relatorios, id_relatorio, id_proposicao)
 
             autoria_prop_sf = prop_sf.get("documento", {}).get("autoria", [])
             autoria_norm = normalize_autoria(autoria_prop_sf, casa)
-            proposicoes_norm.append(Proposicao(id_original=prop_sf.get("id"), 
+            proposicoes_norm.append(Proposicao(id=id_proposicao,
+                                               urn_norma=urn,
+                                               id_original=prop_sf.get("id"), 
                                                nome=prop_sf.get("identificacao"),
                                                ano=prop_sf.get("ano"), 
                                                numero=prop_sf.get("numero"), 
@@ -394,20 +427,52 @@ for norma in tqdm(normas):
                                                url_metadados=f"https://legis.senado.leg.br/dadosabertos/processo/{prop_sf.get('id')}",
                                                casa_atual=Casa.SENADO,
                                                casa_origem=get_casa(proposicoes_origem_urn["casas"][ix-1]) if ix > 0 else get_casa("SF"),
-                                               emendas=normalize_emendas_sf(emendas),
-                                               relatorios=normalize_relatorios_sf(relatorios)))
+                                               emendas=emendas_norm,
+                                               relatorios=relatorios_norm))
+            id_proposicao += 1
     
-    print(proposicoes_norm)
+    #print(proposicoes_norm)
     norma = Norma(nome=nome, urn=urn, tipo_norma=tipo_norma_enum, data_publicacao=data_publicacao, proposicoes=proposicoes_norm)
+    normas_norm.append(norma)
 
+# Conversão para df/parquet
+normas_rows = []
+proposicoes_rows = []
+emendas_rows = []
+relatorios_rows = []
 
-print(norma)
-"""for urn, props in proposicoes.items():
-    if len(props) > 1:
-        print(props)    
-     for resultado in prop.get("resultado", []):
-        id_prop = str(resultado.get("id"))
-        emendas_prop = emendas.get(str(id_prop), {}).get("resultado", [])
-        print(emendas_prop)
-        break
-    break """ 
+for norma in normas_norm:
+    normas_rows.append(
+        norma.model_dump(
+            mode="json",
+            exclude={"proposicoes"}
+        )
+    )
+
+    for proposicao in norma.proposicoes or []:
+        proposicoes_rows.append(
+            proposicao.model_dump(
+                mode="json",
+                exclude={"emendas", "relatorios"}
+            )
+        )
+
+        emendas_rows.extend(
+            emenda.model_dump(mode="json")
+            for emenda in proposicao.emendas or []
+        )
+
+        relatorios_rows.extend(
+            relatorio.model_dump(mode="json")
+            for relatorio in proposicao.relatorios or []
+        )
+
+normas_df = pd.DataFrame(normas_rows)
+proposicoes_df = pd.DataFrame(proposicoes_rows)
+emendas_df = pd.DataFrame(emendas_rows)
+relatorios_df = pd.DataFrame(relatorios_rows)
+
+normas_df.to_parquet("data/datasets/normas.parquet", index=False)
+proposicoes_df.to_parquet("data/datasets/proposicoes.parquet", index=False)
+emendas_df.to_parquet("data/datasets/emendas.parquet", index=False)
+relatorios_df.to_parquet("data/datasets/relatorios.parquet", index=False)
