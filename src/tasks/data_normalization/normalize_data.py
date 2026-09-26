@@ -81,11 +81,13 @@ TIPOS_PROPOSICAO = {
     "PL": TipoProposicao.PL,
     "PLC": TipoProposicao.PL,
     "PLS": TipoProposicao.PL,
+    "PLN": TipoProposicao.PL,
     "PLP": TipoProposicao.PLP,
     "PDG": TipoProposicao.PDG,
     "PR": TipoProposicao.PR,
     "PRS": TipoProposicao.PR,
     "PRC": TipoProposicao.PR,
+    "PRN": TipoProposicao.PR,
     "PDL": TipoProposicao.PDL,
     "PDC": TipoProposicao.PDL,
     "PDS": TipoProposicao.PDL,
@@ -95,6 +97,10 @@ TIPOS_PROPOSICAO = {
     "SCD": TipoProposicao.EMENDA,
     "ECD": TipoProposicao.EMENDA,
     "DEN": TipoProposicao.DENUNCIA,
+    "VET": TipoProposicao.VETO,
+    "PDN": TipoProposicao.PDL,
+    "PRD": TipoProposicao.PDL,
+
 }
 
 MISSING_PROPS = {
@@ -240,7 +246,7 @@ def normalize_autoria(autoria: list[dict], casa: str) -> list[Autor]:
     if casa == "CD":
         return [_normalize_autor_cd(autor) for autor in autoria]
 
-    if casa == "SF":
+    if casa == "SF" or casa == "CN":
         return [_normalize_autor_sf(autor) for autor in autoria]
 
     raise ValueError(f"Casa inválida: {casa}")
@@ -318,6 +324,24 @@ def normalize_relatorios_sf(relatorios: list, id_relatorio: int, id_proposicao: 
         id_relatorio += 1
 
     return relatorios_norm, id_relatorio
+
+def get_url_doc(casa, metadados):
+    if casa not in {"SF", "CN"}:
+        return None
+
+    # Documento principal da matéria
+    url = (metadados.get("documento") or {}).get("url")
+    if url:
+        return url
+
+    # Avulso inicial da matéria
+    for autuacao in metadados.get("autuacoes") or []:
+        for informe in autuacao.get("informesLegislativos") or []:
+            for documento in informe.get("documentosAssociados") or []:
+                if documento.get("siglaTipo") == "AVULSO_INICIAL":
+                    return documento.get("url")
+
+
 
 normas_norm = []
 id_proposicao = 1
@@ -423,14 +447,40 @@ for norma in tqdm(normas):
                                                autoria=autoria_norm, 
                                                ementa=prop_sf.get("conteudo", {}).get("ementa"), 
                                                data_apresentacao=prop_sf.get("documento", {}).get("dataApresentacao"),
-                                               url_doc=prop_sf.get("documento", {}).get("url"),
+                                               url_doc=get_url_doc(casa, prop_sf),
                                                url_metadados=f"https://legis.senado.leg.br/dadosabertos/processo/{prop_sf.get('id')}",
                                                casa_atual=Casa.SENADO,
                                                casa_origem=get_casa(proposicoes_origem_urn["casas"][ix-1]) if ix > 0 else get_casa("SF"),
                                                emendas=emendas_norm,
                                                relatorios=relatorios_norm))
             id_proposicao += 1
-    
+        elif casa == "CN":
+            prop_sf = proposicoes_senado_urn[ix]["resultado"]["dados"][0]
+            emendas = emendas_senado.get(str(prop_sf.get("id")), {}).get("resultado", [])
+            emendas_norm, id_emenda = normalize_emendas_sf(emendas, id_emenda, id_proposicao)
+            relatorios = relatorios_senado.get(str(prop_sf.get("id")), {}).get("resultado", [])
+            relatorios_norm, id_relatorio = normalize_relatorios_sf(relatorios, id_relatorio, id_proposicao)
+
+            autoria_prop_sf = prop_sf.get("documento", {}).get("autoria", [])
+            autoria_norm = normalize_autoria(autoria_prop_sf, casa)
+            proposicoes_norm.append(Proposicao(id=id_proposicao,
+                                               urn_norma=urn,
+                                               id_original=prop_sf.get("id"), 
+                                               nome=prop_sf.get("identificacao"),
+                                               ano=prop_sf.get("ano"), 
+                                               numero=prop_sf.get("numero"), 
+                                               tipo=TIPOS_PROPOSICAO.get(prop_sf.get("sigla")),
+                                               autoria=autoria_norm, 
+                                               ementa=prop_sf.get("conteudo", {}).get("ementa"), 
+                                               data_apresentacao=prop_sf.get("documento", {}).get("dataApresentacao"),
+                                               url_doc=get_url_doc(casa, prop_sf),
+                                               url_metadados=f"https://legis.senado.leg.br/dadosabertos/processo/{prop_sf.get('id')}",
+                                               casa_atual=Casa.CONGRESSO,
+                                               casa_origem=get_casa(proposicoes_origem_urn["casas"][ix-1]) if ix > 0 else get_casa("CN"),
+                                               emendas=emendas_norm,
+                                               relatorios=relatorios_norm))
+            id_proposicao += 1
+            #print(proposicoes_senado_urn[ix]["resultado"]["dados"][0].get("identificacao"))
     #print(proposicoes_norm)
     norma = Norma(nome=nome, urn=urn, tipo_norma=tipo_norma_enum, data_publicacao=data_publicacao, proposicoes=proposicoes_norm)
     normas_norm.append(norma)

@@ -18,6 +18,7 @@ class TipoProposicao(Enum):
     MPV = "Medida Provisória"
     EMENDA = "Emenda"
     DENUNCIA = "Denúncia"
+    VETO = "Veto"
 
 class TipoAutor(str, Enum):
     CIDADAO = "Cidadão"
@@ -105,7 +106,8 @@ class Proposicao(BaseModel):
     tipo: Optional[TipoProposicao] = None
     casa_atual: Casa
     casa_origem: Casa
-    url_doc: Optional[str] = None
+    url_texto_inicial: Optional[str] = None
+    url_autografo: Optional[str] = None
     url_metadados: Optional[str] = None
     autoria: Optional[List[Autor]] = None
     data_apresentacao: Optional[datetime] = None
