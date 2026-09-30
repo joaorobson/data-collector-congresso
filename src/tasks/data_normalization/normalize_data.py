@@ -370,7 +370,17 @@ def get_url_autografo(casa, prop_id, tipo_prop=None):
                     )
                     return candidatos_ordenados[0].get("urlDocumento")
                 elif tipo_prop == TipoProposicao.PDL:
-                    ...
+                    candidatos_promulgacao = []
+                    candidatos_rev_cd = []
+                    for autografo in dados:
+                        if autografo.get("apresentadoNosProcessos", [{}])[0].get("papelNoProcesso") == "Texto oficial para promulgação":
+                            candidatos_promulgacao.append(autografo)
+                        elif autografo.get("apresentadoNosProcessos", [{}])[0].get("papelNoProcesso") == "Texto oficial para revisão na Câmara dos Deputados":
+                            candidatos_rev_cd.append(autografo)
+                    if len(candidatos_promulgacao) >= 1:
+                        return candidatos_promulgacao[0].get("urlDocumento")
+                    elif len(candidatos_rev_cd) == 1:
+                        return candidatos_rev_cd[0].get("urlDocumento")
                 else:
                     papel = tuple([i.get("apresentadoNosProcessos", [{}])[0].get("papelNoProcesso") for i in dados])
                     if papel[0] == "Texto remetido à promulgação pela Câmara dos Deputados":
@@ -382,7 +392,7 @@ def get_url_autografo(casa, prop_id, tipo_prop=None):
             if len(dados) == 1:
                 return dados[0].get("urlInteiroTeor")
             elif len(dados) > 1:
-                if tipo_prop == TipoProposicao.PR:
+                if tipo_prop in (TipoProposicao.PR, TipoProposicao.PDL):
                     return dados[0].get("urlInteiroTeor")
 normas_norm = []
 id_proposicao = 1
