@@ -57,8 +57,8 @@ for urn, fases in tqdm(fases_tramitacao.items()):
         fases_norm[urn] = {
             "tramitacao": [proposicao],
             "casas": [proposicao_origem_dict.get("casa")],
-            "urls": [],
-            "datas": [],
+            "urls": [None],
+            "datas": [None],
             "tem_veto": False,
         }
 

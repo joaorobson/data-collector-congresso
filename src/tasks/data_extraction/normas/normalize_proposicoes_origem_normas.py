@@ -319,9 +319,11 @@ def get_final_origin(origem_sf, urn):
 
     tramitacao_urn = dados_tramitacao.get("tramitacao")
     casas = dados_tramitacao.get("casas")
+    urls = dados_tramitacao.get("urls")
+    datas = dados_tramitacao.get("datas")
 
     if None not in tramitacao_urn:
-        return tramitacao_urn, casas
+        return tramitacao_urn, casas, urls, datas
 
     origem_final = []
 
@@ -347,7 +349,7 @@ def get_final_origin(origem_sf, urn):
         else:
             origem_final.append(None)
 
-    return origem_final, casas
+    return origem_final, casas, urls, datas
 
 
 # Carga de arquivos de metadados
@@ -457,7 +459,7 @@ for norma in tqdm(normas):
 
     origem_sf_norm, casas_sf = normalize_origin_from_sf(origem_sf)
     
-    origem_final, casas_final = get_final_origin(origem_sf_norm, urn)
+    origem_final, casas_final, urls, datas = get_final_origin(origem_sf_norm, urn)
 
     origens[urn] = {
         "casa_origem": casa_origem,
@@ -469,6 +471,8 @@ for norma in tqdm(normas):
         "origem_sf_norm": origem_sf_norm,
         "origem_final": origem_final,
         "casas": casas_final,
+        "urls": urls,
+        "datas": datas
     }
 
 with open(

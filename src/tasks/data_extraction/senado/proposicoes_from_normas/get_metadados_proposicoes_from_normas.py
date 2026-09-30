@@ -167,16 +167,17 @@ async def main():
     for urn, prop in proposicoes_origem.items():
         origens = prop.get("origem_final") or []
         casas = prop.get("casas") or []
+        urls = prop.get("urls") or []
 
         registros_atuais = resultados.get(urn, [])
         novos_registros = []
 
-        for idx, (origem, casa) in enumerate(zip(origens, casas)):
+        for idx, (origem, casa, url) in enumerate(zip(origens, casas, urls)):
             registro_existente = (
                 registros_atuais[idx] if idx < len(registros_atuais) else None
             )
 
-            if casa != "SF" and casa != "CN":
+            if casa not in ("SF", "CN"):
                 total_outras_casas += 1
                 novos_registros.append(
                     registro_existente
@@ -195,20 +196,19 @@ async def main():
                 continue
 
             if not origem:
-                if not origem:
-                    novos_registros.append(
-                        criar_registro(
-                            urn=urn,
-                            url="",
-                            origem=origem,
-                            casa=casa,
-                            sigla=None,
-                            numero=None,
-                            ano=None,
-                            resultado={"dados": []},
-                        )
+                novos_registros.append(
+                    criar_registro(
+                        urn=urn,
+                        url="",
+                        origem=origem,
+                        casa=casa,
+                        sigla=None,
+                        numero=None,
+                        ano=None,
+                        resultado={"dados": []},
                     )
-                    continue
+                )
+                continue
 
             match = PATTERN.search(origem)
             if not match:
@@ -222,22 +222,32 @@ async def main():
                 total_sf_mantidos += 1
                 continue
 
-            if not sigla or not numero or not ano:
-                novos_registros.append(
-                    criar_registro(
-                        urn=urn,
-                        url="",
-                        origem=origem,
-                        casa=casa,
-                        sigla=sigla,
-                        numero=numero,
-                        ano=ano,
-                        resultado={"dados": []},
-                    )
-                )
-                continue
+            url_busca = ""
+            if url:
+                match_url = re.search(r"/materia/(\d+)", url)
+                if match_url:
+                    codigo_materia = match_url.group(1)
+                    url_busca = f"{BASE_URL}?codigoMateria={codigo_materia}&v=1"
 
-            url_busca = f"{BASE_URL}?sigla={sigla}&numero={numero}&ano={ano}&v=1"
+            if not url_busca:
+                if sigla and numero and ano:
+                    url_busca = f"{BASE_URL}?sigla={sigla}&numero={numero}&ano={ano}&v=1"
+                else:
+                    novos_registros.append(
+                        criar_registro(
+                            urn=urn,
+                            url="",
+                            origem=origem,
+                            casa=casa,
+                            sigla=sigla,
+                            numero=numero,
+                            ano=ano,
+                            resultado={"dados": []},
+                        )
+                    )
+                    continue
+
+                
 
             metadata_para_coleta.append(
                 {
