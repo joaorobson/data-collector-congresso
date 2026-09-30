@@ -434,7 +434,7 @@ for norma in tqdm(normas):
 
     origem_sf = extract_origin_from_sf(origens_sf_map.get(urn, {}), casa_origem)
 
-    if  not fases_tramitacao.get(urn, {}).get("tramitacao"):
+    if not fases_tramitacao.get(urn, {}).get("tramitacao"):
         print("URN sem tramitação:", urn)
 
     if not origem_lexml and not origem_normas and not origem_cd_norm and not origem_sf:

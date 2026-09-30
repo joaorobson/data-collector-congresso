@@ -57,6 +57,8 @@ for urn, fases in tqdm(fases_tramitacao.items()):
         fases_norm[urn] = {
             "tramitacao": [proposicao],
             "casas": [proposicao_origem_dict.get("casa")],
+            "urls": [],
+            "datas": [],
             "tem_veto": False,
         }
 
@@ -65,6 +67,8 @@ for urn, fases in tqdm(fases_tramitacao.items()):
         if isinstance(resultado, dict):
             casas = []
             tramitacao = []
+            urls = []
+            datas = []
             fases_lista = resultado.get("fases") or []
 
             for fase in fases_lista:
@@ -80,6 +84,8 @@ for urn, fases in tqdm(fases_tramitacao.items()):
                     prop = normalizar_proposicao(prop)
                 casas.append(casa_sigla)
                 tramitacao.append(prop)
+                urls.append(fase.get("urlMateria"))
+                datas.append(fase.get("data"))
 
             # Captura a flag de veto do resultado
             tem_veto = bool(resultado.get("temVeto"))
@@ -87,6 +93,8 @@ for urn, fases in tqdm(fases_tramitacao.items()):
             fases_norm[urn] = {
                 "tramitacao": tramitacao,
                 "casas": casas,
+                "urls": urls,
+                "datas": datas,
                 "tem_veto": tem_veto,
             }
         else:
