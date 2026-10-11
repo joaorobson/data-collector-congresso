@@ -8,7 +8,6 @@ tipos = [
     "Lei",
     "Lei Complementar".replace(" ", "\u00A0"),
     "Lei Delegada".replace(" ", "\u00A0"),
-    "Medida Provisória".replace(" ", "\u00A0"),
     "Resolução"
 ]
 

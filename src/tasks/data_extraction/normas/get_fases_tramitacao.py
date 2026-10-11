@@ -4,6 +4,7 @@ import os
 import random
 import aiohttp
 from tqdm.asyncio import tqdm
+from urllib.parse import quote
 
 # Configurações de concorrência e resiliência
 CONCORRENCIA = 5
@@ -14,9 +15,10 @@ INPUT_FILE = "data/normas/metadados/proposicao_inicial.json"
 OUTPUT_FILE = "data/normas/metadados/fases_tramitacao.json"
 
 URL_TRAMITACAO = "https://www6ghml.senado.gov.br/dadosmateria/resources/materia-bicameral/detalhes/?sigla={}&numero={}&ano={}&siglaCasa={}"
+URL_TRAMITACAO_MPV = "https://www6ghml.senado.gov.br/dadosmateria/resources/materiaprolegis/{}"
 
 # Siglas de proposições que NÃO devem ser consultadas
-SIGLAS_IGNORADAS = {"MPV", "PRC", "PRS"}
+SIGLAS_IGNORADAS = {"PRC", "PRS", "PRN", "PDN", "PLN", "PDR", "DEN"}
 
 
 def extrair_parametros(dados_proposicao):
@@ -44,10 +46,20 @@ def extrair_parametros(dados_proposicao):
             "numero": numero,
             "ano": ano,
             "siglaCasa": casa,
+            "proposicao": proposicao.strip(),
         }
     except Exception:
         return None
 
+def construir_url(params):
+    """Define a URL apropriada de acordo com o tipo de proposição."""
+    if params["sigla"] == "MPV":
+        identificador = quote(params["proposicao"], safe="/")
+        return URL_TRAMITACAO_MPV.format(identificador)
+
+    return URL_TRAMITACAO.format(
+        params["sigla"], params["numero"], params["ano"], params["siglaCasa"]
+    )
 
 async def fetch_tramitacao(session, semaforo, urn, dados_proposicao):
     params = extrair_parametros(dados_proposicao)
@@ -68,11 +80,9 @@ async def fetch_tramitacao(session, semaforo, urn, dados_proposicao):
             "motivo": f"Tipo de proposição '{params['sigla']}' ignorado pelas regras",
         }
 
-    async with semaforo:
-        url = URL_TRAMITACAO.format(
-            params["sigla"], params["numero"], params["ano"], params["siglaCasa"]
-        )
+    url = construir_url(params)
 
+    async with semaforo:
         for tentativa in range(MAX_RETRIES):
             try:
                 async with session.get(url) as response:
@@ -155,11 +165,16 @@ async def main():
     # 2. Identifica o que já está concluído (Sucesso 200 ou Marcado como Ignorado)
     urns_concluidas = set()
     for urn, r in resultados.items():
-        status_ok = r.get("status_code") == 200 and r.get("resultado") is not None
+        status_ok = r.get("status_code") == 200 and r.get("resultado")
         sem_erro = "erro" not in r or r["erro"] is None
-        is_ignorado = r.get("ignorado") is True
+        
+        dados_origem = r.get("proposicao_origem", {})
+        sigla_salva = extrair_parametros(dados_origem)
+        sigla = sigla_salva["sigla"] if sigla_salva else None
+        
+        is_ignorado_valido = r.get("ignorado") is True and sigla in SIGLAS_IGNORADAS
 
-        if (status_ok and sem_erro) or is_ignorado:
+        if (status_ok and sem_erro) or is_ignorado_valido:
             urns_concluidas.add(urn)
 
     print(f"Total de proposições na entrada: {len(proposicoes)}")
@@ -226,7 +241,7 @@ async def main():
     print("\n--- Resumo Final ---")
     print(f"Total no arquivo '{OUTPUT_FILE}': {len(resultados_ordenados)}")
     print(f"Sucesso (Status 200): {total_ok}")
-    print(f"Ignorados (MPV/PRC): {total_ignorados}")
+    print(f"Ignorados ({', '.join(SIGLAS_IGNORADAS)}): {total_ignorados}")
     print(f"Pendentes com Erro: {total_erros}")
 
 

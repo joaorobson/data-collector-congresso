@@ -322,6 +322,7 @@ def get_final_origin(origem_sf, urn):
     urls = dados_tramitacao.get("urls")
     datas = dados_tramitacao.get("datas")
 
+    print(urn)
     if None not in tramitacao_urn:
         return tramitacao_urn, casas, urls, datas
 
@@ -423,6 +424,9 @@ for norma in tqdm(normas):
         else:
             origem_cd_norm = [origem_cd]
             casas_cd = ["CD"]
+
+    #elif norma["titulo"].startswith("Lei") and norma.get("relacionamentos", "").startswith("Medida Provisóriasucessor"):
+        
 
     urn = norma.get("urn")
     casa_origem = get_casa_iniciadora(urn, origens_sf_map)

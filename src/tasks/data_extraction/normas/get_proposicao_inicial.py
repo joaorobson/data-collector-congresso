@@ -26,6 +26,9 @@ with open(
 ) as f:
     prcs_transf_norma = json.load(f)
 
+with open("data/normas/metadados/mpv_origem_plv.json", "r", encoding="utf-8") as f:
+    mpv_origem_plv = json.load(f)
+
 origens_sf_map = {
     item["urn"]: item.get("resultado") for item in origens_sf if item.get("resultado")
 }
@@ -170,6 +173,10 @@ for norma in tqdm(normas):
         else:
             urn_para_prop_inicial[urn] = {"proposicao": prop_inicial, "casa": "CD"}
 
+    elif norma.get("relacionamentos") and norma.get("relacionamentos").startswith("Projeto de Lei de Conversão"):
+        plv = origens_sf_map[urn][0]["identificacaoProcessoInicial"]
+        mpv = mpv_origem_plv.get(plv)
+        urn_para_prop_inicial[urn] = {"proposicao": mpv, "casa": "CN"}
 
     else:
         casa_inicial = get_casa_iniciadora(urn, origens_sf_map)

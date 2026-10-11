@@ -100,6 +100,8 @@ class Relatorio(BaseModel):
 class Proposicao(BaseModel):
     id: int
     urn_norma: str
+    data_inicio_tramitacao: Optional[datetime] = None
+    data_fim_tramitacao: Optional[datetime] = None
     id_original: Optional[int] = None
     ano: Optional[int] = None
     nome: Optional[str] = None

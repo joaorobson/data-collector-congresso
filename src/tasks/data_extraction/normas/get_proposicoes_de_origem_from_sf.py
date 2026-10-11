@@ -14,14 +14,12 @@ INPUT_FILE = "data/normas/metadados/normas.json"
 OUTPUT_FILE = "data/normas/metadados/proposicoes_de_origem_da_norma_from_sf.json"
 
 URL_NORMA = "https://legis.senado.gov.br/dadosabertos/processo?tipoNorma={}&numeroNorma={}&anoNorma={}&v=1"
-URL_MPVS = "https://legis.senado.gov.br/dadosabertos/processo?sigla=MPV&numero={}&ano={}&v=1"
 URL_PROCESSO = "https://legis.senado.leg.br/dadosabertos/processo/{}?v=1"
 
 tipo_para_sigla = {
     "Lei": "LEI",
     "Decreto Legislativo": "DLG",
     "Emenda Constitucional": "EMC",
-    "Medida Provisória": "MPV",
     "Lei Complementar": "LCP"
 }
 
@@ -83,17 +81,12 @@ async def fetch_norma(session, semaforo, norma):
                     "erro": "Tipo não suportado",
                 }
 
-            if norma["tipo"] != "Medida Provisória":
-                url = URL_NORMA.format(
-                    dados["tipo_sigla"],
-                    dados["numero_norma"],
-                    dados["ano_norma"],
-                )
-            else:
-                url = URL_MPVS.format(
-                    dados["numero_norma"],
-                    dados["ano_norma"],
-                )
+            url = URL_NORMA.format(
+                dados["tipo_sigla"],
+                dados["numero_norma"],
+                dados["ano_norma"],
+            )
+
 
         except Exception as e:
             return {

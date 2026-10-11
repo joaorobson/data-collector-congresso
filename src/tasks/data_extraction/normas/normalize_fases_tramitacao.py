@@ -15,6 +15,9 @@ CASA_PARA_SIGLA = {
     "SENADO": "SF",
     "CONGRESSO": "CN",
     "PRESIDENCIA": "PR",
+    "Câmara dos Deputados": "CD",
+    "Senado Federal": "SF",
+    "Comissão Mista": "CN",
 }
 
 
@@ -47,11 +50,10 @@ for urn, fases in tqdm(fases_tramitacao.items()):
     sigla_origem = proposicao_origem.split()[0] if proposicao_origem else ""
 
     if (
-        urn.startswith("urn:lex:br:federal:medida.provisoria")
-        or urn.startswith("urn:lex:br:senado.federal:resolucao")
+        urn.startswith("urn:lex:br:senado.federal:resolucao")
         or urn.startswith("urn:lex:br:camara.deputados:resolucao")
         or urn.startswith("urn:lex:br:congresso.nacional:resolucao")
-        or sigla_origem in ["MPV", "PLN", "PLV", "PDN", "PDR"]
+        or sigla_origem in ["PLN", "PLV", "PDN", "PDR"]
     ):
         proposicao = re.sub(r"(?<=\d)\.(?=\d)", "", proposicao_origem)
         fases_norm[urn] = {
@@ -62,6 +64,36 @@ for urn, fases in tqdm(fases_tramitacao.items()):
             "tem_veto": False,
         }
 
+    elif urn.startswith("urn:lex:br:federal:medida.provisoria") or sigla_origem == "MPV":
+        resultado = fases.get("resultado")
+        if isinstance(resultado, dict):
+            casas = []
+            tramitacao = []
+            urls = []
+            datas = []
+            fases_lista = resultado.get("fases") or []
+            prop = fases.get("proposicao_origem").get("proposicao")
+
+            casas.append("CN")
+            tramitacao.append(prop)
+            urls.append(None)
+            datas.append(None)
+
+            tem_veto = False
+            if resultado.get("veto"):
+                tem_veto = True 
+                casas.append("CN")
+                tramitacao.append(resultado.get("veto").get("identificacao"))
+                urls.append(None)
+                datas.append(None)
+
+            fases_norm[urn] = {
+                "tramitacao": tramitacao,
+                "casas": casas,
+                "urls": urls,
+                "datas": datas,
+                "tem_veto": tem_veto,
+            }
     elif not fases.get("ignorado"):
         resultado = fases.get("resultado")
         if isinstance(resultado, dict):
