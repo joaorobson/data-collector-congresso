@@ -9,6 +9,7 @@ import pandas as pd
 
 
 normas_path = "data/normas/metadados/normas.json"
+urls_textos_normas_path = "data/normas/metadados/urls_textos_normas.json"
 proposicoes_origem = "data/normas/metadados/proposicoes_origem_normalizadas.json"
 proposicoes_origem_nao_encontradas = "data/normas/metadados/proposicoes_origem_nao_encontradas.json"
 
@@ -26,6 +27,9 @@ autografos_camara_path = "data/camara/metadados/autografos.json"
 
 with open(normas_path, "r", encoding="utf-8") as f:
     normas = json.load(f)
+
+with open(urls_textos_normas_path, "r", encoding="utf-8") as f:
+    urls_textos_normas = json.load(f)
 
 with open(proposicoes_senado_path, "r", encoding="utf-8") as f:
     proposicoes_senado = json.load(f)
@@ -612,7 +616,14 @@ for norma in tqdm(normas):
             id_proposicao += 1
             #print(proposicoes_senado_urn[ix]["resultado"]["dados"][0].get("identificacao"))
     #print(proposicoes_norm)
-    norma = Norma(nome=nome, urn=urn, tipo_norma=tipo_norma_enum, data_publicacao=data_publicacao, proposicoes=proposicoes_norm)
+
+    norma = Norma(nome=nome, 
+                  urn=urn, 
+                  tipo_norma=tipo_norma_enum, 
+                  url_texto=urls_textos_normas.get(urn).get("url"), 
+                  urls_anexos=urls_textos_normas.get(urn, {}).get("anexos", []),
+                  data_publicacao=data_publicacao,
+                  proposicoes=proposicoes_norm)
     normas_norm.append(norma)
 # Conversão para df/parquet
 normas_rows = []

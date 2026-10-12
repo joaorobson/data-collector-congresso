@@ -11,7 +11,7 @@ ORACLE_USERNAME = os.environ.get("ORACLE_USERNAME")
 ORACLE_PASSWORD = os.environ.get("ORACLE_PASSWORD")
 ORACLE_HOST = os.environ.get("ORACLE_HOST")
 
-input_path = "data/normas/metadados/normas_com_emendas.json"
+input_path = "data/normas/metadados/normas.json"
 output_path = "data/normas/metadados/urls_textos_normas.json"
 
 URL_SENADO = "https://legis.senado.leg.br/dadosabertos/legislacao/urn?urn={}"
@@ -72,7 +72,8 @@ async def main():
         # ==========================================
         # Monta lista de consultas
         # ==========================================
-        for urn in normas:
+        for norma in normas:
+            urn = norma.get("urn")
             if urn in resultado and resultado[urn].get("url"):
                 continue
 
