@@ -3,7 +3,7 @@ import json
 with open("data/normas/metadados/normas.json", "r", encoding="utf-8") as f:
     normas = json.load(f)
 
-with open("data/normas/metadados/proposicoes_de_origem_da_norma_from_normas_leg_br.json", "r", encoding="utf-8") as f:
+with open("data/normas/metadados/props_origem_normas_leg_br.json", "r", encoding="utf-8") as f:
     origens = json.load(f)
 
 source_by_urn = {

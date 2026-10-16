@@ -1,5 +1,89 @@
 # Coletor de normas e proposições
 
+## Tramitação
+
+`https://www6ghml.senado.gov.br/dadosmateria/resources/materia-bicameral/siglas-tipos-materia-bicameral`
+[
+  "PDL",
+  "PEC",
+  "PL",
+  "PLP",
+  "ECD",
+  "PDS",
+  "PDC",
+  "PLC",
+  "PLS",
+  "SCD",
+  "VET"
+]
+
+```mermaid
+
+    flowchart TD
+        LeXML --> get_normas["get_metadados_normas.py"] --> normas[("normas.json")]
+        normas --> get_textos_normas["get_urls_textos_normas.py"] --> urls_textos_normas[("urls_textos_normas.json")]
+
+        get_proj_res_cd["get_projetos_resolucao_cd_trans_norma.py"] --> proj_res_cd[("projetos_resolucao_cd_transf_norma.json")]
+        normas --> get_proposicoes_de_origem_from_normas_leg_br["get_proposicoes_de_origem_from_normas_leg_br.py"] --> props_origem_normas_leg_br[("props_origem_normas_leg_br.json")]
+        normas --> get_proposicoes_de_origem_from_sf["get_proposicoes_de_origem_from_sf.py"] --> props_origem_sf[("props_origem_sf.json")]
+        props_origem_sf --> get_mpv_origem_plv["get_mpv_origem_plv.py"] --> mpv_origem_plv[("mpv_origem_plv.json")]
+
+        normas --> get_proposicao_inicial
+        props_origem_sf --> get_proposicao_inicial
+        props_origem_normas_leg_br --> get_proposicao_inicial
+        proj_res_cd --> get_proposicao_inicial
+        mpv_origem_plv --> get_proposicao_inicial
+        
+        get_proposicao_inicial["get_proposicao_inicial.py"] --> proposicao_inicial[("proposicao_inicial.json")] --> get_fases_tramitacao["get_fases_tramitacao.py"]
+        get_fases_tramitacao --> fases_tramitacao[("fases_tramitacao.json")] --> normalize_fases_tramitacao["normalize_fases_tramitacao.py"] --> fases_tramitacao_norm[("fases_tramitacao_norm.json")]
+        
+        proj_res_cd --> normalize_proposicoes_origem_normas
+        normas --> normalize_proposicoes_origem_normas
+        props_origem_sf --> normalize_proposicoes_origem_normas
+        props_origem_normas_leg_br --> normalize_proposicoes_origem_normas
+        fases_tramitacao_norm --> normalize_proposicoes_origem_normas
+
+        normalize_proposicoes_origem_normas["normalize_proposicoes_origem_normas.py"] --> proposicoes_origem_normalizadas[("proposicoes_origem_normalizadas.json")]
+        normalize_proposicoes_origem_normas --> proposicoes_origem_nao_encontradas[("proposicoes_origem_nao_encontradas.json")]
+        proposicoes_origem_normalizadas --> c_get_autoria_proposicoes["camara/get_autoria_proposicoes.py"] --> c_autoria[("camara/autoria_proposicoes.json")]
+        proposicoes_origem_normalizadas --> c_get_proposicoes["camara/get_metadados_proposicoes.py"] --> c_proposicoes[("camara/proposicoes.json")]
+        c_proposicoes --> c_get_autografos["camara/get_metadados_autografos.py"] --> c_autografos[("camara/autografos.json")]
+        c_proposicoes --> c_get_avulsos["camara/get_metadados_avulsos_iniciais.py"] --> c_avulsos[("camara/avulsos_iniciais.json")]
+        c_proposicoes --> c_get_emendas["camara/get_metadados_emendas.py"] --> c_emendas[("camara/emendas.json")]
+        c_siglas_tipos[("camara/siglas_tipos.json")] --> c_filter_siglas_tipos_relatorios_e_pareceres["camara/filter_siglas_tipos_relatorios_e_pareceres.py"] --> c_sigla_tipos_relatorios_e_pareceres[("camara/sigla_tipos_relatorios_e_pareceres.json")]
+        c_proposicoes --> c_get_relatorios["camara/get_metadados_relatorios_e_pareceres.py"] --> c_relatorios[("camara/relatorios_e_pareceres.json")]
+        c_sigla_tipos_relatorios_e_pareceres --> c_get_relatorios
+        
+        proposicoes_origem_normalizadas --> s_get_proposicoes["senado/get_metadados_proposicoes.py"] --> s_proposicoes[("proposicoes.json")]
+        s_proposicoes --> s_get_autografos["senado/get_metadados_autografos.py"] --> s_autografos[("senado/autografos.json")]
+        s_proposicoes --> s_get_avulsos["senado/get_metadados_avulsos_iniciais.py"] --> s_avulsos[("senado/avulsos_iniciais.json")]
+        s_proposicoes --> s_get_emendas["senado/get_metadados_emendas.py"] --> s_emendas[("senado/emendas.json")]
+        s_siglas_tipos[("senado/siglas_tipos.json")] --> s_filter_siglas_tipos_relatorios_e_pareceres["senado/filter_siglas_tipos_relatorios_e_pareceres.py"] --> s_sigla_tipos_relatorios_e_pareceres[("senado/sigla_tipos_relatorios_e_pareceres.json")]
+        s_proposicoes --> s_get_relatorios["senado/get_metadados_relatorios_e_pareceres.py"] --> s_relatorios[("senado/relatorios_e_pareceres.json")]
+        s_sigla_tipos_relatorios_e_pareceres --> s_get_relatorios
+
+
+        normas --> normalize_data["normalize_data.py"] --> normas_parquet[("normas.parquet")]
+        normalize_data --> proposicoes_parquet[("proposicoes.parquet")]
+        normalize_data --> emendas_parquet[("emendas.parquet")]
+        normalize_data --> relatorios_parquet[("relatorios.parquet")]
+        urls_textos_normas --> normalize_data
+        proposicoes_origem_normalizadas --> normalize_data
+        proposicoes_origem_nao_encontradas --> normalize_data
+        s_proposicoes --> normalize_data
+        s_autografos --> normalize_data
+        s_avulsos --> normalize_data
+        s_relatorios --> normalize_data
+        c_proposicoes --> normalize_data
+        c_autografos --> normalize_data
+        c_avulsos --> normalize_data
+        c_relatorios --> normalize_data
+        c_autoria --> normalize_data
+
+    classDef json fill:#d1fae5,stroke:#059669,color:#064e3b
+        class s_get_autografos json
+```
+
 ## Instalar dependências
 
 ```
@@ -38,7 +122,7 @@ uv sync
     ```
     python -m src.tasks.data_extraction.normas.get_proposicoes_de_origem_from_normas_leg_br
     ```
-* JSON de saída: [proposicoes_de_origem_da_norma_from_normas_leg_br.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/proposicoes_de_origem_da_norma_from_normas_leg_br.json)
+* JSON de saída: [props_origem_normas_leg_br.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/props_origem_normas_leg_br.json)
 
 ### Coleta das proposições com origem ausnte no portal normas.leg.br
 
@@ -61,7 +145,7 @@ uv sync
     ```
     python -m src.tasks.data_extraction.normas.get_proposicao_de_origem_from_sf
     ```
-* JSON de saída: [proposicoes_de_origem_da_norma_from_sf.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/proposicoes_de_origem_da_norma_from_sf.json)
+* JSON de saída: [props_origem_sf.json](https://github.com/joaorobson/data-collector-congresso/blob/main/data/normas/metadados/props_origem_sf.json)
 
 
 

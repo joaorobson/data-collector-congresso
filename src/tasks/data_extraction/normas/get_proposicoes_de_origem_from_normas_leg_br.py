@@ -83,7 +83,7 @@ async def main():
             resultados.append(resultado)
 
     with open(
-        "data/normas/metadados/proposicoes_de_origem_da_norma_from_normas_leg_br.json",
+        "data/normas/metadados/props_origem_normas_leg_br.json",
         "w",
         encoding="utf-8"
     ) as f:

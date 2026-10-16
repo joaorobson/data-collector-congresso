@@ -278,6 +278,7 @@ def normalize_emendas_cd(emendas: list, id_emenda: int, id_proposicao: int):
         emendas_norm.append(Emenda(
             id=id_emenda,
             id_proposicao=id_proposicao,
+            ementa=emenda.get("ementa"),
             numero=int(emenda.get("numero")),
             id_original=int(emenda.get("id")),
             data_apresentacao=emenda.get("dataApresentacao"),
@@ -311,6 +312,7 @@ def normalize_emendas_sf(emendas: list, id_emenda: int, id_proposicao: int):
         emendas_norm.append(Emenda(
             id=id_emenda,
             id_proposicao=id_proposicao,
+            ementa=emenda.get("descricaoDocumentoEmenda"),
             numero=int(emenda.get("numero")),
             id_original=int(emenda.get("id")),
             data_apresentacao=emenda.get("dataApresentacao"),

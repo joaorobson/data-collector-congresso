@@ -11,7 +11,7 @@ CONCORRENCIA = 5
 MAX_RETRIES = 8
 BASE_BACKOFF = 2
 
-INPUT_FILE = "data/normas/metadados/proposicoes_de_origem_da_norma_from_sf.json"
+INPUT_FILE = "data/normas/metadados/props_origem_sf.json"
 OUTPUT_FILE = "data/normas/metadados/mpv_origem_plv.json"
 
 URL_PROCESSO = "https://legis.senado.leg.br/dadosabertos/processo/{}?v=1"

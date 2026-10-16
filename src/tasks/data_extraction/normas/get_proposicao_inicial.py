@@ -3,14 +3,14 @@ from tqdm import tqdm
 import re
 
 with open(
-    "data/normas/metadados/proposicoes_de_origem_da_norma_from_sf.json",
+    "data/normas/metadados/props_origem_sf.json",
     "r",
     encoding="utf-8",
 ) as f:
     origens_sf = json.load(f)
 
 with open(
-    "data/normas/metadados/proposicoes_de_origem_da_norma_from_normas_leg_br.json",
+    "data/normas/metadados/props_origem_normas_leg_br.json",
     "r",
     encoding="utf-8",
 ) as f:

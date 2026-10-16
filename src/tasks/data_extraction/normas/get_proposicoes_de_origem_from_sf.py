@@ -11,7 +11,7 @@ MAX_RETRIES = 8
 BASE_BACKOFF = 2
 
 INPUT_FILE = "data/normas/metadados/normas.json"
-OUTPUT_FILE = "data/normas/metadados/proposicoes_de_origem_da_norma_from_sf.json"
+OUTPUT_FILE = "data/normas/metadados/props_origem_sf.json"
 
 URL_NORMA = "https://legis.senado.gov.br/dadosabertos/processo?tipoNorma={}&numeroNorma={}&anoNorma={}&v=1"
 URL_PROCESSO = "https://legis.senado.leg.br/dadosabertos/processo/{}?v=1"
