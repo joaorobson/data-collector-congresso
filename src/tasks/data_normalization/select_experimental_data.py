@@ -4,13 +4,34 @@ import pandas as pd
 # -------------------------------------------------------------------------
 # CONFIGURAÇÃO DE PARÂMETROS
 # -------------------------------------------------------------------------
-MIN_EMENDAS_ETAPA = 24  # Limiar mínimo de emendas em pelo menos UMA etapa
+MIN_EMENDAS_ETAPA = 41  # Limiar mínimo de emendas em pelo menos UMA etapa
 
 # 1. Carregar base completa
 normas_df = pd.read_parquet("data/datasets/full/normas.parquet")
 proposicoes_df = pd.read_parquet("data/datasets/full/proposicoes.parquet")
 emendas_df = pd.read_parquet("data/datasets/full/emendas.parquet")
 relatorios_df = pd.read_parquet("data/datasets/full/relatorios.parquet")
+
+# -------------------------------------------------------------------------
+# FILTRO 0: Exclusão de proposições orçamentárias (ex: PLNs, LDO, LOA)
+# -------------------------------------------------------------------------
+coluna_tipo = "sigla_tipo" if "sigla_tipo" in proposicoes_df.columns else "tipo"
+
+is_pln_nome = (
+    proposicoes_df["nome"]
+    .astype(str)
+    .str.strip()
+    .str.upper()
+    .str.startswith("PLN")
+)
+
+# Identifica URNs associadas a qualquer proposição estritamente orçamentária
+urns_com_pln = set(
+    proposicoes_df[is_pln_nome]["urn_norma"].dropna().unique()
+)
+
+# Remove as proposições vinculadas a essas URNs orçamentárias logo na raiz
+proposicoes_df = proposicoes_df[~proposicoes_df["urn_norma"].isin(urns_com_pln)].copy()
 
 # -------------------------------------------------------------------------
 # FILTRO 1: Pelo menos uma etapa (id_proposicao) com >= MIN_EMENDAS_ETAPA
@@ -42,20 +63,18 @@ urns_candidatas_qtd = set(
 # - Proposição comum: deve ter url_texto_inicial E url_autografo
 # - Veto: deve ter url_texto_inicial (não exige url_autografo)
 # -------------------------------------------------------------------------
-coluna_tipo = "sigla_tipo" if "sigla_tipo" in proposicoes_df.columns else "tipo"
-
 is_veto = (
     proposicoes_df[coluna_tipo].astype(str).str.strip().str.upper().str.contains("VET")
 )
 
 tem_texto_inicial = (
-    proposicoes_df["url_texto_inicial"].notna()
-    & (proposicoes_df["url_texto_inicial"].astype(str).str.strip() != "")
+    proposicoes_df["avulso_inicial_url_doc"].notna()
+    & (proposicoes_df["avulso_inicial_url_doc"].astype(str).str.strip() != "")
 )
 
 tem_autografo = (
-    proposicoes_df["url_autografo"].notna()
-    & (proposicoes_df["url_autografo"].astype(str).str.strip() != "")
+    proposicoes_df["autografo_url_doc"].notna()
+    & (proposicoes_df["autografo_url_doc"].astype(str).str.strip() != "")
 )
 
 prop_valida_url = (is_veto & tem_texto_inicial) | (~is_veto & tem_texto_inicial & tem_autografo)

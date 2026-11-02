@@ -340,23 +340,23 @@ def normalize_relatorios_sf(relatorios: list, id_relatorio: int, id_proposicao: 
 
     return relatorios_norm, id_relatorio
 
-def get_url_texto_inicial(casa, metadados):
+def get_avulso_inicial(casa, metadados):
     if casa not in {"SF", "CN"}:
         return None
 
     # Documento principal da matéria
     url = (metadados.get("documento") or {}).get("url")
     if url:
-        return url
+        return AvulsoInicial(url_doc=url, data_apresentacao=(metadados.get("documento") or {}).get("dataApresentacao"))
 
     # Avulso inicial da matéria
     for autuacao in metadados.get("autuacoes") or []:
         for informe in autuacao.get("informesLegislativos") or []:
             for documento in informe.get("documentosAssociados") or []:
                 if documento.get("siglaTipo") == "AVULSO_INICIAL":
-                    return documento.get("url")
+                    return AvulsoInicial(url_doc=documento.get("url"), data_apresentacao=documento.get("dataRecebimento"))
 
-def get_url_autografo(casa, prop_id, data_inicio, data_fim, filtrar_por_data):
+def get_autografo(casa, prop_id, data_inicio, data_fim, filtrar_por_data):
     inicio = (
         datetime.strptime(data_inicio, "%Y-%m-%d").date()
         if filtrar_por_data and data_inicio
@@ -412,7 +412,7 @@ def get_url_autografo(casa, prop_id, data_inicio, data_fim, filtrar_por_data):
                 ),
                 reverse=True,
             )
-            return candidatos[0].get("urlDocumento")
+            return Autografo(url_doc=candidatos[0].get("urlDocumento"), data_apresentacao=candidatos[0].get("dataRecebimento"))
 
     elif casa == "CD":
         dados = autografos_camara.get(prop_id, {}).get("resultado", [])
@@ -439,7 +439,7 @@ def get_url_autografo(casa, prop_id, data_inicio, data_fim, filtrar_por_data):
                 key=lambda item: item.get("dataApresentacao") or "",
                 reverse=True,
             )
-            return dados[0].get("urlInteiroTeor")
+            return Autografo(url_doc=dados[0].get("urlInteiroTeor"), data_apresentacao=dados[0].get("dataApresentacao"))
 
     return None
 
@@ -502,11 +502,12 @@ for norma in tqdm(normas):
                 tipo_prop_norm not in (TipoProposicao.MPV, TipoProposicao.VETO)
                 and len(proposicoes_origem_urn["casas"]) > 1
             )
-            url_autografo = get_url_autografo(casa, 
+            autografo = get_autografo(casa, 
                                               str(prop_cd.get("id")), 
                                               proposicoes_origem_urn["datas"][ix], 
                                               proposicoes_origem_urn["datas"][ix+1] if ix+1 < len(proposicoes_origem_urn["datas"]) else None,
                                               filtrar_por_data)
+            avulso_inicial = AvulsoInicial(url_doc=prop_cd.get("urlInteiroTeor"), data_apresentacao=prop_cd.get("dataApresentacao"))
             proposicoes_norm.append(Proposicao(id=id_proposicao,
                                                id_original=prop_cd.get("id"), 
                                                urn_norma=urn,
@@ -517,8 +518,8 @@ for norma in tqdm(normas):
                                                autoria=autoria_norm,
                                                ementa=prop_cd.get("ementa"), 
                                                data_apresentacao=prop_cd.get("dataApresentacao"),
-                                               url_texto_inicial=prop_cd.get("urlInteiroTeor"),
-                                               url_autografo=url_autografo,
+                                               autografo=autografo,
+                                               avulso_inicial=avulso_inicial,
                                                url_metadados=prop_cd.get("uri"),
                                                casa_atual=Casa.CAMARA,
                                                casa_origem=get_casa(proposicoes_origem_urn["casas"][ix-1]) if ix > 0 else get_casa("CD"),
@@ -555,7 +556,7 @@ for norma in tqdm(normas):
                             tipo_prop_norm not in (TipoProposicao.MPV, TipoProposicao.VETO)
                             and len(proposicoes_origem_urn["casas"]) > 1
                         )
-            url_autografo = get_url_autografo(casa, 
+            autografo = get_autografo(casa, 
                                                 str(prop_sf.get("id")), 
                                                 proposicoes_origem_urn["datas"][ix], 
                                                 proposicoes_origem_urn["datas"][ix+1] if ix+1 < len(proposicoes_origem_urn["datas"]) else None,
@@ -570,8 +571,8 @@ for norma in tqdm(normas):
                                                autoria=autoria_norm, 
                                                ementa=prop_sf.get("conteudo", {}).get("ementa"), 
                                                data_apresentacao=prop_sf.get("documento", {}).get("dataApresentacao"),
-                                               url_texto_inicial=get_url_texto_inicial(casa, prop_sf),
-                                               url_autografo=url_autografo,
+                                               avulso_inicial=get_avulso_inicial(casa, prop_sf),
+                                               autografo=autografo,
                                                url_metadados=f"https://legis.senado.leg.br/dadosabertos/processo/{prop_sf.get('id')}",
                                                casa_atual=Casa.SENADO,
                                                casa_origem=get_casa(proposicoes_origem_urn["casas"][ix-1]) if ix > 0 else get_casa("SF"),
@@ -593,11 +594,11 @@ for norma in tqdm(normas):
                             tipo_prop_norm not in (TipoProposicao.MPV, TipoProposicao.VETO)
                             and len(proposicoes_origem_urn["casas"]) > 1
                         )
-            url_autografo = get_url_autografo(casa, 
-                                                str(prop_sf.get("id")), 
-                                                proposicoes_origem_urn["datas"][ix], 
-                                                proposicoes_origem_urn["datas"][ix+1] if ix+1 < len(proposicoes_origem_urn["datas"]) else None,
-                                                filtrar_por_data)
+            autografo = get_autografo(casa, 
+                                        str(prop_sf.get("id")), 
+                                        proposicoes_origem_urn["datas"][ix], 
+                                        proposicoes_origem_urn["datas"][ix+1] if ix+1 < len(proposicoes_origem_urn["datas"]) else None,
+                                        filtrar_por_data)
             proposicoes_norm.append(Proposicao(id=id_proposicao,
                                                urn_norma=urn,
                                                id_original=prop_sf.get("id"), 
@@ -608,8 +609,8 @@ for norma in tqdm(normas):
                                                autoria=autoria_norm, 
                                                ementa=prop_sf.get("conteudo", {}).get("ementa"), 
                                                data_apresentacao=prop_sf.get("documento", {}).get("dataApresentacao"),
-                                               url_texto_inicial=get_url_texto_inicial(casa, prop_sf),
-                                               url_autografo=url_autografo,
+                                               avulso_inicial=get_avulso_inicial(casa, prop_sf),
+                                               autografo=autografo,
                                                url_metadados=f"https://legis.senado.leg.br/dadosabertos/processo/{prop_sf.get('id')}",
                                                casa_atual=Casa.CONGRESSO,
                                                casa_origem=get_casa(proposicoes_origem_urn["casas"][ix-1]) if ix > 0 else get_casa("CN"),
@@ -642,12 +643,30 @@ for norma in normas_norm:
     )
 
     for proposicao in norma.proposicoes or []:
-        proposicoes_rows.append(
-            proposicao.model_dump(
+        prop_dict = proposicao.model_dump(
                 mode="json",
-                exclude={"emendas", "relatorios"}
+                exclude={"emendas", "relatorios", "autografo", "avulso_inicial"}
             )
-        )
+
+        if proposicao.autografo:
+            autografo_dict = proposicao.autografo.model_dump(mode="json")
+            for k, v in autografo_dict.items():
+                prop_dict[f"autografo_{k}"] = v
+        else:
+            # Garante as colunas mesmo se não houver autógrafo
+            for k in ["url_doc", "data_apresentacao"]:
+                prop_dict[f"autografo_{k}"] = None
+        
+        if proposicao.avulso_inicial:
+            avulso_dict = proposicao.avulso_inicial.model_dump(mode="json")
+            for k, v in avulso_dict.items():
+                prop_dict[f"avulso_inicial_{k}"] = v
+        else:
+            # Garante as colunas mesmo se não houver autógrafo
+            for k in ["url_doc", "data_apresentacao"]:
+                prop_dict[f"avulso_inicial_{k}"] = None
+
+        proposicoes_rows.append(prop_dict)
 
         emendas_rows.extend(
             emenda.model_dump(mode="json")

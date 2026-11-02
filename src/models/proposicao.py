@@ -86,6 +86,7 @@ class Emenda(BaseModel):
     numero: int
     id_original: int
     data_apresentacao: datetime
+    ementa: Optional[str] = None
     url_doc: Optional[str] = None
     url_metadados: Optional[str] = None
 
@@ -96,6 +97,14 @@ class Relatorio(BaseModel):
     url_doc: Optional[str] = None
     url_metadados: Optional[str] = None
     data_apresentacao: datetime
+
+class Autografo(BaseModel):
+    url_doc : Optional[str] = None
+    data_apresentacao: Optional[datetime] = None
+
+class AvulsoInicial(BaseModel):
+    url_doc : Optional[str] = None
+    data_apresentacao: Optional[datetime] = None
 
 class Proposicao(BaseModel):
     id: int
@@ -108,8 +117,8 @@ class Proposicao(BaseModel):
     tipo: Optional[TipoProposicao] = None
     casa_atual: Casa
     casa_origem: Casa
-    url_texto_inicial: Optional[str] = None
-    url_autografo: Optional[str] = None
+    autografo: Optional[Autografo] = None
+    avulso_inicial: Optional[AvulsoInicial] = None
     url_metadados: Optional[str] = None
     autoria: Optional[List[Autor]] = None
     data_apresentacao: Optional[datetime] = None
