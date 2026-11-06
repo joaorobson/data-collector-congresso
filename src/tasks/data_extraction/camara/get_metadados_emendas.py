@@ -138,9 +138,11 @@ async def main():
                         body = resposta.get("resultado")
                         if isinstance(body, dict):
                             dados_relacionadas = body.get("dados", [])
-                            # Filtra as siglas
+                            # Filtra as siglas e garante que o campo 'detalhes' comece vazio/null
                             for r in dados_relacionadas:
                                 if r.get("siglaTipo") in siglas_permitidas:
+                                    if "detalhes" not in r:
+                                        r["detalhes"] = None
                                     relacionadas.append(r)
 
                     resultados[processo["id"]] = {
@@ -159,29 +161,29 @@ async def main():
         print("✅ Etapa 1: Todas as proposições já tiveram emendas buscadas.")
 
     # =======================================================
-    # ETAPA 2: BUSCA DE INTEIRO TEOR (DETALHES)
+    # ETAPA 2: BUSCA DE INTEIRO TEOR (POPULANDO "detalhes")
     # =======================================================
     
-    # Criamos um mapeamento de referência para modificar o dicionário 'resultados' diretamente na memória
     uris_para_baixar = []
     emenda_refs = {}  # uri -> lista de referências de dicionários de emendas
 
     for id_proc, info in resultados.items():
         for emenda in info.get("resultado", []):
-            if "urlInteiroTeor" not in emenda and emenda.get("uri"):
+            if emenda.get("uri"):
                 uri = emenda["uri"]
-                if uri not in emenda_refs:
-                    emenda_refs[uri] = []
-                    uris_para_baixar.append(uri)
-                # Adiciona a referência do dict real para atualizar in-place depois
-                emenda_refs[uri].append(emenda)
+                # Só baixa se o campo 'detalhes' ainda for None ou não existir
+                if emenda.get("detalhes") is None:
+                    if uri not in emenda_refs:
+                        emenda_refs[uri] = []
+                        uris_para_baixar.append(uri)
+                    emenda_refs[uri].append(emenda)
 
     total_uris = len(uris_para_baixar)
 
     if total_uris > 0:
-        print(f"\n🔍 Iniciando Etapa 2: {total_uris} emendas pendentes de 'urlInteiroTeor'...")
+        print(f"\n🔍 Iniciando Etapa 2: {total_uris} emendas pendentes de detalhes...")
         
-        with tqdm(total=total_uris, desc="Etapa 2 (Inteiro Teor)", unit="req") as pbar:
+        with tqdm(total=total_uris, desc="Etapa 2 (Detalhes)", unit="req") as pbar:
             for i in range(0, total_uris, BATCH_SIZE):
                 lote_uris = uris_para_baixar[i : i + BATCH_SIZE]
                 lote_num = (i // BATCH_SIZE) + 1
@@ -191,21 +193,18 @@ async def main():
                 for uri, resp in zip(lote_uris, respostas_detalhes):
                     if resp.get("status") == 200 and isinstance(resp.get("resultado"), dict):
                         dados_detalhe = resp["resultado"].get("dados", {})
-                        # Mesmo que seja None, salva para marcar que já tentamos buscar
-                        url_teor = dados_detalhe.get("urlInteiroTeor")
                         
-                        # Atualiza todas as emendas (referências de dicionário) que apontam pra esta URI
+                        # Atribui os dados completos dentro da chave 'detalhes' de cada emenda correspondente
                         for emenda_dict in emenda_refs[uri]:
-                            emenda_dict["urlInteiroTeor"] = url_teor
+                            emenda_dict["detalhes"] = dados_detalhe
 
-                # Salva o arquivo principal contendo agora as emendas com urlInteiroTeor atualizado
+                # Salva o arquivo principal
                 salvar_progresso(output_path, resultados)
                 pbar.write(f"💾 Etapa 2 - Lote {lote_num} finalizado e salvo.")
                 await asyncio.sleep(1.0)
                 pbar.update(len(lote_uris))
     else:
-        print("\n✅ Etapa 2: Nenhuma emenda pendente de URL de Inteiro Teor.")
-
+        print("\n✅ Etapa 2: Nenhuma emenda pendente de detalhes.")
 
     elapsed = time.time() - start_time
     print("\n🏁 Processo da Câmara concluído com sucesso!")

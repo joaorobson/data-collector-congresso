@@ -86,6 +86,9 @@ class Emenda(BaseModel):
     numero: int
     id_original: int
     data_apresentacao: datetime
+    orgao: Optional[str] = None
+    tipo: Optional[str] = None
+    descricao: Optional[str] = None
     ementa: Optional[str] = None
     url_doc: Optional[str] = None
     url_metadados: Optional[str] = None

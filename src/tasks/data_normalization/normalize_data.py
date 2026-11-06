@@ -280,6 +280,9 @@ def normalize_emendas_cd(emendas: list, id_emenda: int, id_proposicao: int):
             id_proposicao=id_proposicao,
             ementa=emenda.get("ementa"),
             numero=int(emenda.get("numero")),
+            orgao=emenda.get("detalhes", {}).get("statusProposicao", {}).get("siglaOrgao"),
+            tipo=emenda.get("detalhes", {}).get("descricaoTipo"),
+            descricao=emenda.get("detalhes", {}).get("statusProposicao", {}).get("despacho"),
             id_original=int(emenda.get("id")),
             data_apresentacao=emenda.get("dataApresentacao"),
             url_doc=emenda.get("urlInteiroTeor"),
@@ -309,17 +312,21 @@ def normalize_relatorios_cd(relatorios: list, id_relatorio: int, id_proposicao: 
 def normalize_emendas_sf(emendas: list, id_emenda: int, id_proposicao: int):
     emendas_norm = []
     for emenda in emendas:
-        emendas_norm.append(Emenda(
-            id=id_emenda,
-            id_proposicao=id_proposicao,
-            ementa=emenda.get("descricaoDocumentoEmenda"),
-            numero=int(emenda.get("numero")),
-            id_original=int(emenda.get("id")),
-            data_apresentacao=emenda.get("dataApresentacao"),
-            url_doc=emenda.get("urlDocumentoEmenda"),
-            url_metadados=f"https://legis.senado.leg.br/dadosabertos/processo/emenda?idProcesso={emenda.get('idProcesso')}&v=1"
-        ))
-        id_emenda += 1
+        if emenda.get("identificacao") and not emenda.get("identificacao").startswith("PLV"):
+            emendas_norm.append(Emenda(
+                id=id_emenda,
+                id_proposicao=id_proposicao,
+                ementa=emenda.get("descricaoDocumentoEmenda"),
+                numero=int(emenda.get("numero")),
+                orgao=emenda.get("nomeColegiado"),
+                tipo=None,
+                descricao=emenda.get("identificacao"),
+                id_original=int(emenda.get("id")),
+                data_apresentacao=emenda.get("dataApresentacao"),
+                url_doc=emenda.get("urlDocumentoEmenda"),
+                url_metadados=f"https://legis.senado.leg.br/dadosabertos/processo/emenda?idProcesso={emenda.get('idProcesso')}&v=1"
+            ))
+            id_emenda += 1
 
     return emendas_norm, id_emenda
 
